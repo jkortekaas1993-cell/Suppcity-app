@@ -1,15 +1,22 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { useAsync, Notice } from '@/features/shop';
 import { useCustomerSession } from '@/lib/shopify';
 import { Button, Card, ListItem, Screen, Text } from '@/ui';
 
-import { PointsBalanceSlot } from './components/PointsBalanceSlot';
 import { loadProfileName, signIn, signOut } from './services/session';
 
-/** Ik tab: account, orders, points slot, PT code, privacy and account deletion. */
-export function IkScreen() {
+export interface IkScreenProps {
+  /**
+   * Points section for signed-in users (the points feature's PointsPanel),
+   * composed by the route file so account does not depend on points internals.
+   */
+  pointsSlot?: ReactNode;
+}
+
+/** Ik tab: account, orders, points, PT code, privacy, CSV export and account deletion. */
+export function IkScreen({ pointsSlot }: IkScreenProps) {
   const session = useCustomerSession();
   const signedIn = session === 'signedIn';
   const name = useAsync(() => (signedIn ? loadProfileName() : Promise.resolve(null)), [signedIn]);
@@ -43,7 +50,7 @@ export function IkScreen() {
         {message ? <Notice message={message} onDismiss={() => setMessage(null)} /> : null}
       </Card>
 
-      {signedIn ? <PointsBalanceSlot /> : null}
+      {signedIn ? (pointsSlot ?? null) : null}
 
       <Card eyebrow="Instellingen" style={{ padding: 0 }}>
         {signedIn ? (
@@ -52,8 +59,8 @@ export function IkScreen() {
         <ListItem title="Mijn voorraad" subtitle="Herinnering voordat je pot leeg is" onPress={() => router.push('/shop/stock')} />
         <ListItem title="Toestemmingen" subtitle="Per onderdeel aan of uit, altijd intrekbaar" onPress={() => router.push('/account/privacy')} />
         {signedIn ? <ListItem title="PT-code koppelen" onPress={() => router.push('/account/pt-code')} /> : null}
-        {/* CSV export is owned by the Tracker builder (hard rule 9); link the route once it exists. */}
-        <ListItem title="Gegevens exporteren" subtitle="CSV van al je trainingen" />
+        {/* CSV export + import is the tracker's Data screen (hard rule 9). */}
+        <ListItem title="Gegevens exporteren" subtitle="CSV van al je trainingen" onPress={() => router.push('/workout/data')} />
         {signedIn ? (
           <ListItem title="Account verwijderen" subtitle="Definitief, direct in de app" onPress={() => router.push('/account/delete')} />
         ) : null}

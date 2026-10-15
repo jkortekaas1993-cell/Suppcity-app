@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Field, Notice, SubScreen, useAsync } from '@/features/shop';
 import { Button, Text } from '@/ui';
 
-import { normalisePtCode } from '../contracts';
+import { normalisePtCode } from '@/lib/supabase/ptCode';
 import { getAccountServices } from '../services/registry';
 
 export function PtCodeScreen() {

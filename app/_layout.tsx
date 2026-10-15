@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ActiveWorkoutProvider } from '@/features/tracker';
+import { AppServices } from '@/integration';
 import { DatabaseProvider } from '@/lib/db';
 import { ThemeProvider, useTheme } from '@/ui';
 
@@ -28,9 +28,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <DatabaseProvider>
-          <ActiveWorkoutProvider>
+          {/* AppServices mounts ActiveWorkoutProvider and wires sync, account and points. */}
+          <AppServices>
             <RootStack />
-          </ActiveWorkoutProvider>
+          </AppServices>
         </DatabaseProvider>
       </ThemeProvider>
     </SafeAreaProvider>

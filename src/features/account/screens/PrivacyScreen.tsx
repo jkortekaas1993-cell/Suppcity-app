@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
 
 import { LoadState, Notice, SubScreen } from '@/features/shop';
+import { POLICY_VERSION } from '@/lib/config';
 import { useCustomerSession } from '@/lib/shopify';
+import type { ConsentState, ConsentType } from '@/lib/supabase';
 import { Card, Text, useTheme } from '@/ui';
 
 import { applyConsent, CONSENT_COPY, CONSENT_ORDER } from '../consentCopy';
-import type { ConsentState, ConsentType } from '../contracts';
 import { getAccountServices } from '../services/registry';
 
 /**
@@ -37,10 +38,11 @@ export function PrivacyScreen() {
   async function toggle(type: ConsentType, granted: boolean) {
     if (!service) return;
     const previous = states;
-    setStates(applyConsent(states, type, granted, new Date().toISOString()));
+    setStates(applyConsent(states, type, granted, new Date().toISOString(), POLICY_VERSION));
     setPending(type);
     try {
-      const saved = await service.setConsent(type, granted);
+      // Append-only event with server timestamp + policy version (hard rule 2).
+      const saved = granted ? await service.grant(type, POLICY_VERSION) : await service.revoke(type, POLICY_VERSION);
       setStates((s) => s.map((x) => (x.type === type ? saved : x)));
     } catch {
       setStates(previous);
@@ -85,9 +87,9 @@ export function PrivacyScreen() {
                 <Text variant="caption" tone="muted">
                   {copy.body}
                 </Text>
-                {state?.updatedAt ? (
+                {state?.changedAt ? (
                   <Text variant="caption" tone="muted">
-                    Laatst gewijzigd {new Date(state.updatedAt).toLocaleDateString('nl-NL')}
+                    Laatst gewijzigd {new Date(state.changedAt).toLocaleDateString('nl-NL')}
                   </Text>
                 ) : null}
               </View>

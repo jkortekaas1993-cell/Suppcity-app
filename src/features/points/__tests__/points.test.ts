@@ -1,6 +1,7 @@
 import { FunctionCallError } from '@/lib/supabase/contracts';
 
 import { redeemErrorMessage } from '../hooks';
+import { pointsForOrder, workoutPointsAvailable } from '../rules';
 import { canAfford, formatEuroCents, ledgerLabel } from '../service';
 
 describe('points display helpers', () => {
@@ -18,5 +19,17 @@ describe('points display helpers', () => {
     expect(redeemErrorMessage(new FunctionCallError('redeem_failed', 502)).message).toContain('teruggezet');
     expect(redeemErrorMessage(new FunctionCallError('redeem_pending', 503)).retryable).toBe(true);
     expect(redeemErrorMessage(new Error('offline')).retryable).toBe(true);
+  });
+});
+
+describe('points rules (hard rule 5)', () => {
+  it('awards whole euros only', () => {
+    expect(pointsForOrder(49.99)).toBe(49);
+    expect(pointsForOrder(-5)).toBe(0);
+    expect(pointsForOrder(Number.NaN)).toBe(0);
+  });
+  it('caps rewarded workouts per week', () => {
+    expect(workoutPointsAvailable(2)).toBeGreaterThan(0);
+    expect(workoutPointsAvailable(3)).toBe(0);
   });
 });

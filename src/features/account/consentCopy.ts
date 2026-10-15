@@ -1,4 +1,5 @@
-import type { ConsentType } from './contracts';
+import type { ConsentState } from '@/lib/supabase/consents';
+import type { ConsentType } from '@/lib/supabase/types';
 
 /** Dutch copy per consent. Each one is separate and can be withdrawn (hard rule 2). */
 export const CONSENT_COPY: Record<ConsentType, { title: string; body: string }> = {
@@ -34,12 +35,13 @@ export const CONSENT_ORDER: readonly ConsentType[] = [
 
 /** Optimistic toggle helper: apply locally, roll back on failure. Pure. */
 export function applyConsent(
-  states: readonly { type: ConsentType; granted: boolean; updatedAt: string | null }[],
+  states: readonly ConsentState[],
   type: ConsentType,
   granted: boolean,
   nowIso: string,
-) {
+  policyVersion: string,
+): ConsentState[] {
   const exists = states.some((s) => s.type === type);
-  const next = states.map((s) => (s.type === type ? { ...s, granted, updatedAt: nowIso } : s));
-  return exists ? next : [...next, { type, granted, updatedAt: nowIso }];
+  const next = states.map((s) => (s.type === type ? { ...s, granted, policyVersion, changedAt: nowIso } : s));
+  return exists ? next : [...next, { type, granted, policyVersion, changedAt: nowIso }];
 }

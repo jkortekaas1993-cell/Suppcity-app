@@ -1,24 +1,27 @@
-import type { ConsentService, PointsBalanceSource, PtCodeService } from '../contracts';
+import type { ConsentService, PtCodeService } from '@/lib/supabase';
 
 /**
- * Service slots the Backend&Sync / Points builders fill in at startup, e.g. in
- * their own module: `registerAccountServices({ consents: supabaseConsentService })`.
- * Until then the UI shows a calm "nog niet beschikbaar" state; nothing is faked.
+ * Service slots filled once at app start by the app shell
+ * (src/integration/AppServices.tsx). The account UI codes against the backend
+ * contracts in src/lib/supabase only. Until registered, the UI shows a calm
+ * "nog niet beschikbaar" state; nothing is faked.
  */
-export class ServiceUnavailableError extends Error {
-  constructor(service: string) {
-    super(`${service} not registered yet`);
-    this.name = 'ServiceUnavailableError';
-  }
+
+/** Cross-feature side effects of the account lifecycle (sync, local data). */
+export interface AccountLifecycle {
+  /** After a successful Shopify → Supabase exchange: claim local rows and start sync. */
+  onSignedIn(info: { userId: string; isNewUser: boolean; adultConfirmed: boolean }): Promise<void>;
+  /** After `delete-account` succeeded: wipe all local tracker data (hard rule 3). */
+  onAccountDeleted(): Promise<void>;
 }
 
 interface AccountServices {
   consents: ConsentService | null;
   ptCode: PtCodeService | null;
-  points: PointsBalanceSource | null;
+  lifecycle: AccountLifecycle | null;
 }
 
-const services: AccountServices = { consents: null, ptCode: null, points: null };
+const services: AccountServices = { consents: null, ptCode: null, lifecycle: null };
 
 export function registerAccountServices(impl: Partial<AccountServices>): void {
   Object.assign(services, impl);
