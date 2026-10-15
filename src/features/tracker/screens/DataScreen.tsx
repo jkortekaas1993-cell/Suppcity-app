@@ -7,15 +7,15 @@ import { Button, Card, Text } from '@/ui';
 import { TextField } from '../components/primitives';
 import { StackScreen } from '../components/StackScreen';
 import { CsvImportError } from '../logic/csvImport';
+import { pickCsvText, shareCsvFile } from '../services/csvFiles';
 import { exportAllCsv, importWorkoutCsv, type ImportSummary } from '../services/dataPort';
 
 /**
  * CSV export of all own training data (hard rule 9) and Hevy/Strong import.
  *
- * MVP without extra native deps: export goes through the OS share sheet as
- * text; import takes pasted CSV text. A file picker (expo-document-picker)
- * and file export (expo-file-system + expo-sharing) can replace both once
- * those packages are added to package.json.
+ * Export writes a real .csv file and opens the share sheet (expo-file-system +
+ * expo-sharing; plain-text share as fallback). Import reads a picked file
+ * (expo-document-picker) or pasted CSV text.
  */
 export function DataScreen() {
   const repos = useRepositories();
@@ -28,18 +28,19 @@ export function DataScreen() {
     setBusy('export');
     try {
       const out = await exportAllCsv(repos);
-      await Share.share({ title: 'suppcity-trainingen.csv', message: out.csv });
+      const shared = await shareCsvFile(out.csv).catch(() => false);
+      if (!shared) await Share.share({ title: 'suppcity-trainingen.csv', message: out.csv });
     } finally {
       setBusy(null);
     }
   };
 
-  const doImport = async () => {
+  const doImport = async (text: string = csv) => {
     setBusy('import');
     setError(null);
     setResult(null);
     try {
-      setResult(await importWorkoutCsv(repos, csv, newId));
+      setResult(await importWorkoutCsv(repos, text, newId));
       setCsv('');
     } catch (err) {
       setError(err instanceof CsvImportError ? err.message : 'Importeren is mislukt. Controleer het bestand.');
@@ -58,7 +59,7 @@ export function DataScreen() {
       <Card eyebrow="Importeren uit Hevy of Strong">
         <Text tone="muted">
           Exporteer je data in Hevy (Profiel → Instellingen → Data exporteren) of Strong (Instellingen → Exporteer
-          data) en plak de inhoud van het CSV-bestand hieronder. Onbekende oefeningen worden als eigen oefening
+          data) en kies het CSV-bestand of plak de inhoud hieronder. Onbekende oefeningen worden als eigen oefening
           aangemaakt. Al geïmporteerde trainingen worden overgeslagen.
         </Text>
         <TextField
@@ -72,6 +73,16 @@ export function DataScreen() {
           style={{ minHeight: 140, textAlignVertical: 'top', paddingTop: 12, fontSize: 13 }}
         />
         <Button label="Importeren" variant="secondary" disabled={!csv.trim()} loading={busy === 'import'} onPress={() => void doImport()} />
+        <Button
+          label="Kies CSV-bestand"
+          variant="ghost"
+          disabled={busy !== null}
+          onPress={() =>
+            void pickCsvText()
+              .then((text) => (text ? doImport(text) : undefined))
+              .catch(() => setError('Het bestand kon niet worden gelezen.'))
+          }
+        />
         {error ? <Text tone="danger">{error}</Text> : null}
         {result ? (
           <>
