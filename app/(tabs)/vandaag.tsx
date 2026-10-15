@@ -1,3 +1,7 @@
+import { ReorderCard } from '@/features/shop';
 import { VandaagScreen } from '@/features/tracker';
 
-export default VandaagScreen;
+/** Vandaag shows at most one smart card from outside the tracker. */
+export default function Vandaag() {
+  return <VandaagScreen smartCard={<ReorderCard />} />;
+}
