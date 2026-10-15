@@ -95,7 +95,7 @@ maybe('sqlite repositories', () => {
     expect(ex[0]?.is_custom).toBe(true);
   });
 
-  it('stores local app state and applies remote rows last-write-wins', async () => {
+  it('stores local app state and applies merged remote rows verbatim', async () => {
     const { repos } = await setup();
     await repos.appState.set('k', { a: 1 });
     expect(await repos.appState.get<{ a: number }>('k')).toEqual({ a: 1 });
@@ -105,11 +105,21 @@ maybe('sqlite repositories', () => {
     await repos.sync.applyRemote('routines', [
       { id: 'r1', user_id: 'u1', name: 'Server', notes: null, program_slug: null, position: 0, created_at: 'x', updated_at: '2026-01-02T00:00:00.000Z', deleted_at: null, unknown_col: 1 },
     ]);
+    // The engine already merged (LWW + sticky deletes): the row is written as given,
+    // even with an older updated_at, and updated_at is NOT bumped.
     await repos.sync.applyRemote('routines', [
-      { id: 'r1', name: 'Older', updated_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'r1', name: 'Merged', updated_at: '2026-01-01T00:00:00.000Z', deleted_at: '2026-01-03T00:00:00.000Z' },
     ]);
-    expect((await repos.routines.list())[0]?.name).toBe('Server');
+    const [r1] = await repos.sync.getByIds('routines', ['r1', 'missing']);
+    expect(r1).toMatchObject({ id: 'r1', name: 'Merged', updated_at: '2026-01-01T00:00:00.000Z', deleted_at: '2026-01-03T00:00:00.000Z' });
+    expect(await repos.sync.getByIds('routines', ['missing'])).toEqual([]);
+    expect(await repos.routines.list()).toEqual([]);
     await repos.sync.claimAnonymousRows('u2');
+    await repos.appState.set('sync:u2:push:routines', 'x');
+    await repos.wipeLocalData();
+    expect(await repos.sync.getByIds('routines', ['r1'])).toEqual([]);
+    expect(await repos.appState.get('sync:u2:push:routines')).toBeNull();
+    expect(await repos.exercises.get('bench-press-barbell')).toMatchObject({ slug: 'bench-press-barbell' });
     await expect(repos.sync.changesSince('profiles', null)).rejects.toThrow();
   });
 });

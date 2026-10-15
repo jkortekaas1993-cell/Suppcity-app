@@ -137,9 +137,15 @@ export interface AppStateRepository {
   remove(key: string): Promise<void>;
 }
 
-/** Sync seam for Backend&Sync (custom sync now, PowerSync later). Includes soft-deleted rows. */
+/**
+ * Sync seam for Backend&Sync (custom sync now, PowerSync later). Includes soft-deleted
+ * rows. Structurally satisfies `LocalSyncStore` in src/lib/db/sync/types.ts.
+ */
 export interface SyncSource {
   changesSince(table: string, updatedAfter: IsoDateTime | null): Promise<Record<string, unknown>[]>;
+  /** Rows by id (incl. soft-deleted), same shape as `changesSince`; missing ids are omitted. */
+  getByIds(table: string, ids: string[]): Promise<Record<string, unknown>[]>;
+  /** Writes already-merged rows verbatim: keeps their updated_at, no LWW check, no bump. */
   applyRemote(table: string, rows: Record<string, unknown>[]): Promise<void>;
   /** Attach anonymous local rows to the logged-in user after first login. */
   claimAnonymousRows(userId: Uuid): Promise<void>;
@@ -155,4 +161,10 @@ export interface Repositories {
   sync: SyncSource;
   /** Inserts/updates the built-in exercise library (idempotent). */
   seedLibrary(): Promise<void>;
+  /**
+   * Hard rule 3: after the account is deleted, removes ALL local tracker data and
+   * local app state (incl. sync cursors and the active-workout snapshot), then
+   * re-seeds the built-in library so the app keeps working signed-out.
+   */
+  wipeLocalData(): Promise<void>;
 }

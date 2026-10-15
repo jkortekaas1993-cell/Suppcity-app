@@ -3,6 +3,7 @@ export { ActiveWorkoutBar, formatElapsed } from './ActiveWorkoutBar';
 export {
   ActiveWorkoutProvider,
   useActiveWorkout,
+  type ActiveWorkoutProviderProps,
   useActiveWorkoutActions,
   type ActiveWorkoutActions,
   type ActiveWorkoutState,

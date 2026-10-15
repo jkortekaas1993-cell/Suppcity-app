@@ -106,8 +106,20 @@ async function notificationsAllowed(): Promise<boolean> {
   }
 }
 
-export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
+export interface ActiveWorkoutProviderProps {
+  children: ReactNode;
+  /**
+   * Called (fire-and-forget) after a workout is finished and stored locally. The app
+   * shell uses it to sync and then claim workout points; the tracker itself never
+   * imports sync or points. Errors are swallowed: the workout is already saved.
+   */
+  onWorkoutFinished?: (workoutId: string) => void | Promise<void>;
+}
+
+export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWorkoutProviderProps) {
   const repos = useRepositories();
+  const onFinishedRef = useRef(onWorkoutFinished);
+  onFinishedRef.current = onWorkoutFinished;
   const [state, dispatch] = useReducer(activeWorkoutReducer, null);
   const stateRef = useRef<ActiveWorkoutState | null>(null);
   stateRef.current = state;
@@ -301,6 +313,8 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
         await repos.appState.remove(SNAPSHOT_KEY);
         persistedSetIds.current = new Set();
         send({ type: 'end' });
+        const hook = onFinishedRef.current;
+        if (hook) void Promise.resolve().then(() => hook(current.workoutId)).catch(() => undefined);
         return current.workoutId;
       },
 

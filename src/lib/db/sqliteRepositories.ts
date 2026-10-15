@@ -571,6 +571,13 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     return cols;
   }
 
+  /** Sync wire-ish local format: booleans and arrays decoded (same shape for changesSince and getByIds). */
+  function decodeSyncRows(t: TrackerTable, rows: Record<string, unknown>[]): Record<string, unknown>[] {
+    return t === 'exercises'
+      ? rows.map((r) => ({ ...r, is_custom: r.is_custom === 1, secondary_muscles: parseMuscles(String(r.secondary_muscles ?? '[]')) }))
+      : rows;
+  }
+
   const sync: SyncSource = {
     async changesSince(table, updatedAfter) {
       const t = assertTable(table);
@@ -580,9 +587,20 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
         `SELECT * FROM ${t} WHERE (? IS NULL OR updated_at > ?) ${extra} ORDER BY updated_at`,
         [updatedAfter, updatedAfter],
       );
-      return t === 'exercises'
-        ? rows.map((r) => ({ ...r, is_custom: r.is_custom === 1, secondary_muscles: parseMuscles(String(r.secondary_muscles ?? '[]')) }))
-        : rows;
+      return decodeSyncRows(t, rows);
+    },
+    async getByIds(table, ids) {
+      const t = assertTable(table);
+      const out: Record<string, unknown>[] = [];
+      // Stay well below SQLite's bound-parameter limit.
+      for (let i = 0; i < ids.length; i += 500) {
+        const part = ids.slice(i, i + 500);
+        if (part.length === 0) continue;
+        out.push(
+          ...(await db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${t} WHERE id IN (${placeholders(part.length)})`, part)),
+        );
+      }
+      return decodeSyncRows(t, out);
     },
     async applyRemote(table, rows) {
       const t = assertTable(table);
@@ -598,11 +616,14 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
           }
           const keys = Object.keys(row);
           if (!keys.includes('id') || !keys.includes('updated_at')) continue;
-          const updates = keys.filter((k) => k !== 'id').map((k) => `${k} = excluded.${k}`);
-          // Last write wins on updated_at.
+          // Rows arrive ALREADY MERGED by the sync engine (LWW + sticky deletes, see
+          // src/lib/db/sync/merge.ts), so they are written verbatim: no LWW guard here
+          // (it would drop a merged sticky delete) and updated_at is never bumped
+          // (that would echo every pulled row back to the server).
+          const updates = keys.filter((k) => k !== 'id' && k !== 'created_at').map((k) => `${k} = excluded.${k}`);
           await db.runAsync(
             `INSERT INTO ${t} (${keys.join(', ')}) VALUES (${placeholders(keys.length)})
-             ON CONFLICT(id) DO UPDATE SET ${updates.join(', ')} WHERE excluded.updated_at > ${t}.updated_at`,
+             ON CONFLICT(id) DO UPDATE SET ${updates.join(', ')}`,
             keys.map((k) => row[k] ?? null),
           );
         }
@@ -638,5 +659,16 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     });
   }
 
-  return { exercises, routines, workouts, sets, dataPort, appState, sync, seedLibrary };
+  async function wipeLocalData(): Promise<void> {
+    await db.withTransactionAsync(async () => {
+      // Children first (foreign keys), then the local-only app_state (incl. sync cursors).
+      for (const t of ['sets', 'routine_exercises', 'workouts', 'routines', 'exercises', 'app_state'] as const) {
+        await db.runAsync(`DELETE FROM ${t}`, []);
+      }
+    });
+    columnCache.clear();
+    await seedLibrary();
+  }
+
+  return { exercises, routines, workouts, sets, dataPort, appState, sync, seedLibrary, wipeLocalData };
 }
