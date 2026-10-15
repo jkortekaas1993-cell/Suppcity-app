@@ -10,6 +10,8 @@ EU project. Postgres + RLS on every table, four Edge Functions (Deno), one pg_cr
 | `migrations/0002_sync.sql` | `server_updated_at` pull cursor + LWW trigger `sync_row_write` |
 | `migrations/0003_accounts_points.sql` | Shopify linking, `delete_account`, points rules, redeem tiers/redemptions, GDPR helpers |
 | `migrations/0004_consents_retention.sql` | `set_consent` RPC, `run_retention` + pg_cron |
+| `migrations/0005_pt_code.sql` | PT code format check |
+| `migrations/0006_hardening.sql` | `confirm_adult()` RPC + protected `adult_confirmed_at`/`deleted_at`, `updated_at` cap (now + 5 min), `redeem_expire_stale()` + pg_cron (every 15 min), consent source `app` only, pinned `search_path` |
 | `functions/shopify-auth-exchange` | Shopify Customer Account token → Supabase session |
 | `functions/delete-account` | Deletes the caller's account (hard rule 3) |
 | `functions/shopify-webhooks` | `orders/paid` points + mandatory GDPR webhooks |
@@ -30,7 +32,7 @@ supabase functions deploy redeem-points
 ```
 
 Then in the dashboard:
-1. **Database → Extensions:** check `pg_cron` is enabled; `select * from cron.job` shows `suppcity-retention` (03:17 UTC daily). If 0004 ran before pg_cron was enabled: `select cron.schedule('suppcity-retention', '17 3 * * *', 'select public.run_retention()');`
+1. **Database → Extensions:** check `pg_cron` is enabled; `select * from cron.job` shows `suppcity-retention` (03:17 UTC daily). If 0004 ran before pg_cron was enabled: `select cron.schedule('suppcity-retention', '17 3 * * *', 'select public.run_retention()');`. Same for 0006: `select cron.schedule('suppcity-redeem-sweep', '*/15 * * * *', 'select public.redeem_expire_stale()');`
 2. **Authentication → Providers → Email:** sign-ups OFF (users are only created server-side). Leave the Email provider itself enabled (session minting uses it internally; no mail is sent).
 3. **Authentication → Rate limits:** keep defaults; `shopify-auth-exchange` calls `generateLink` once per login.
 
