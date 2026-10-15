@@ -3,4 +3,5 @@ export { currentUserId, deleteAccount, signInWithShopifyToken, signOut } from '.
 export { CONSENT_TYPES, createConsentService, toConsentStates, type ConsentService, type ConsentState } from './consents';
 export * from './contracts';
 export { invokeFunction, toFunctionCallError } from './functions';
+export { createPtCodeService, normalisePtCode, type PtCodeService } from './ptCode';
 export type * from './types';

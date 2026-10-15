@@ -1,6 +1,7 @@
 import { toConsentStates } from '../consents';
 import { AuthExchangeResponse, FunctionCallError } from '../contracts';
 import { toFunctionCallError } from '../functions';
+import { normalisePtCode } from '../ptCode';
 
 describe('consents', () => {
   it('lists every consent type, defaulting to not granted', () => {
@@ -40,5 +41,13 @@ describe('contracts', () => {
     });
     expect(ok.success).toBe(true);
     expect(AuthExchangeResponse.safeParse({ session: {} }).success).toBe(false);
+  });
+});
+
+describe('PT code', () => {
+  it('normalises and validates (mirrors the 0005 CHECK constraint)', () => {
+    expect(normalisePtCode(' pt 1234 ')).toBe('PT1234');
+    expect(normalisePtCode('ab')).toBeNull();
+    expect(normalisePtCode('bad-code!')).toBeNull();
   });
 });
