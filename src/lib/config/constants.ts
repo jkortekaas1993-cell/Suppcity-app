@@ -1,6 +1,6 @@
 /** Pinned external API versions (hard rule 7). Bump deliberately, once per quarter, in a dedicated PR. */
-export const SHOPIFY_STOREFRONT_API_VERSION = '2025-10';
-export const SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION = '2025-10';
+export const SHOPIFY_STOREFRONT_API_VERSION = '2026-10';
+export const SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION = '2026-10';
 
 /** Points rules (hard rule 5). Server is authoritative; these mirror it for UI only. */
 export const POINTS = {

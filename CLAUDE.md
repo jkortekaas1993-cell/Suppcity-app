@@ -63,7 +63,7 @@ Rules for working across features:
 ## Version policy
 
 - Expo SDK 54 (React Native 0.81, React 19.1). Add packages with `npx expo install <pkg>` so the version fits the SDK. Run `npm run deps:check` before every release.
-- Shopify Storefront and Customer Account API: `2025-10` (see `constants.ts`). Check once per quarter.
+- Shopify Storefront and Customer Account API: `2026-10` (see `constants.ts`). Check once per quarter.
 - Commit `package-lock.json` and use `npm ci` in CI.
 
 ## Running the app
