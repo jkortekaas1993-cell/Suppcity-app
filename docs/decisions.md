@@ -37,6 +37,7 @@ Short ADRs. Add a new one at the bottom; do not rewrite old ones (mark them "Sup
 
 ## ADR-9: Expo Notifications
 - **Decision:** `expo-notifications` for rest-timer (local) and stock reminders (local/remote). Ask permission only after the first finished workout; max 1 promotional push per week.
+- **Implementation (C3):** the summary of the first finished workout shows `NotificationOptInCard` with separate choices (Rusttimer, Bestelstatus, Aanvullen, Acties; Acties default off, max 1 per week via `canSendPromotion`). Only "Opslaan" calls `requestPermissionsAsync`. Choices live in local `app_state` (`notifications.prefs`). A foreground handler (`setNotificationHandler`) shows the rest-timer notification while the app is open. Marketing push additionally requires the server-side `marketing_push` consent; no promotional push is sent on the local choice alone.
 
 ## ADR-10: One pinned Shopify API version for all Shopify APIs
 - **Decision:** `SHOPIFY_API_VERSION = '2026-10'` in `src/lib/config/constants.ts` is used for Storefront, Customer Account AND Admin (Edge Functions mirror it in `supabase/functions/_shared/config.ts`; a test asserts equality). Bumped once per quarter in a dedicated PR.

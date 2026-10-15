@@ -1,16 +1,19 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { useRepositories, type Exercise, type WorkoutSet } from '@/lib/db';
 import { Button, Card, ListItem, Text, useTheme } from '@/ui';
 
+import { NotificationOptInCard } from '../components/NotificationOptInCard';
 import { IconButton, Stat } from '../components/primitives';
 import { StackScreen } from '../components/StackScreen';
 import { useFocusQuery } from '../components/useFocusQuery';
 import { formatDateNl, formatDuration, formatKg, formatNumberNl } from '../logic/format';
 import { epley1rm } from '../logic/oneRepMax';
+import { shouldOfferNotificationCard } from '../logic/notificationPrefs';
 import { PR_LABELS_NL } from '../logic/prs';
+import { loadNotificationPrefs } from '../notifications';
 import { buildWorkoutReport } from '../services/workoutSummary';
 
 /** Detail of a finished workout; with ?klaar=1 it doubles as the finish summary. */
@@ -35,6 +38,17 @@ export function WorkoutDetailScreen() {
     return { ...found, report, exercises };
   }, [repos, id]);
   const { data, loading } = useFocusQuery(load);
+
+  // ADR-9 / C3: offer notifications once, after the first finished workout.
+  const [offerNotifications, setOfferNotifications] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (!justFinished) return;
+    void loadNotificationPrefs(repos.appState).then((p) => alive && setOfferNotifications(shouldOfferNotificationCard(p, justFinished)));
+    return () => {
+      alive = false;
+    };
+  }, [repos, justFinished]);
 
   if (loading && !data) return <StackScreen title="Training">{null}</StackScreen>;
   if (!data) {
@@ -87,6 +101,8 @@ export function WorkoutDetailScreen() {
           </View>
         </Card>
       ) : null}
+
+      {offerNotifications ? <NotificationOptInCard onDone={() => setOfferNotifications(false)} /> : null}
 
       {report && report.prs.length > 0 ? (
         <Card eyebrow="Persoonlijke records">

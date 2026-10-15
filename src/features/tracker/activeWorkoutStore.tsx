@@ -13,6 +13,8 @@ import { Vibration } from 'react-native';
 
 import { newId, nowIso, useRepositories, type Repositories, type SetType, type WorkoutSet } from '@/lib/db';
 
+import { restTimerAllowed } from './logic/notificationPrefs';
+import { installForegroundNotificationHandler, loadNotificationPrefs, osPermissionGranted } from './notifications';
 import {
   activeWorkoutReducer,
   DEFAULT_REST_SECONDS,
@@ -96,14 +98,11 @@ function toSetRows(state: ActiveWorkoutState): (Omit<WorkoutSet, 'created_at' | 
   return rows;
 }
 
-async function notificationsAllowed(): Promise<boolean> {
-  try {
-    // Never ask here: permission is requested elsewhere after the first finished workout (ADR-9).
-    const { status } = await Notifications.getPermissionsAsync();
-    return status === 'granted';
-  } catch {
-    return false;
-  }
+async function notificationsAllowed(repos: Repositories): Promise<boolean> {
+  // Never ask here: permission is requested from the summary card after the first
+  // finished workout (ADR-9). The user's own "Rusttimer" choice must also be on.
+  const prefs = await loadNotificationPrefs(repos.appState);
+  return restTimerAllowed(prefs, await osPermissionGranted());
 }
 
 export interface ActiveWorkoutProviderProps {
@@ -128,6 +127,11 @@ export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWor
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistChain = useRef<Promise<void>>(Promise.resolve());
   const restNotificationId = useRef<string | null>(null);
+
+  // Rest-timer notifications also show while the app is open (foreground handler).
+  useEffect(() => {
+    installForegroundNotificationHandler();
+  }, []);
 
   // --- hydrate after app start ---------------------------------------------------
   useEffect(() => {
@@ -194,7 +198,7 @@ export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWor
     }, ms);
 
     void (async () => {
-      if (!(await notificationsAllowed()) || cancelled) return;
+      if (!(await notificationsAllowed(repos)) || cancelled) return;
       const id = await Notifications.scheduleNotificationAsync({
         content: { title: 'Rust voorbij', body: 'Tijd voor je volgende set.', sound: true },
         trigger: {
@@ -214,7 +218,7 @@ export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWor
       restNotificationId.current = null;
       if (id) void Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined);
     };
-  }, [restEndsAt]);
+  }, [restEndsAt, repos]);
 
   // --- actions -------------------------------------------------------------------------
   const actions = useMemo<ActiveWorkoutActions>(() => {
