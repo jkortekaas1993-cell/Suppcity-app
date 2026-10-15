@@ -66,7 +66,8 @@ Rules for working across features:
 - Expo SDK 54 (React Native 0.81, React 19.1). Add packages with `npx expo install <pkg>` so the version fits the SDK. Run `npm run deps:check` before every release.
 - Shopify Storefront, Customer Account and Admin API: `2026-10` (`SHOPIFY_API_VERSION` in `constants.ts`; Edge Function mirror in `supabase/functions/_shared/config.ts`, a test keeps them equal). Latest stable on 2026-10-15, supported until 2027-10-16. Check once per quarter (ADR-10).
 - Consent texts: `POLICY_VERSION` in `constants.ts`; bump it when consent copy or the privacy policy changes.
-- Commit `package-lock.json` and use `npm ci` in CI.
+- Exact versions only in `package.json` (no `^`/`~`; `.npmrc` has `save-exact=true`, CI checks it).
+- Commit `package-lock.json`; CI then uses `npm ci` automatically. Until the lockfile exists (the build sandbox has no npm registry), CI runs `npm install` and uploads the generated lockfile as the `package-lock` artifact: download it from the first green run on `main`, run `npx expo install --check`, and commit it in a separate PR.
 
 ## Running the app
 

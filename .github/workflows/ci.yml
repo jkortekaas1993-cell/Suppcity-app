@@ -19,9 +19,21 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # Uses `npm ci` once package-lock.json is committed; falls back to install until then.
+      # Hard rule 7: exact versions only (no ^ or ~ ranges).
+      - name: Check pinned versions
+        run: |
+          node -e "const p=require('./package.json');const bad=Object.entries({...p.dependencies,...p.devDependencies}).filter(([,v])=>!/^\d+\.\d+\.\d+$/.test(v));if(bad.length){console.error('Unpinned:',bad);process.exit(1)}"
+      # `npm ci` as soon as package-lock.json is committed; `npm install` only until then
+      # (the lockfile is generated in CI: download the package-lock artifact and commit it).
       - name: Install
-        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: Upload generated lockfile (until it is committed)
+        if: ${{ hashFiles('package-lock.json') != '' && github.event_name == 'push' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          if-no-files-found: ignore
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
