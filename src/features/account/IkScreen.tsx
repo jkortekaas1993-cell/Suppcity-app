@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 
 import { useAsync, Notice } from '@/features/shop';
 import { useCustomerSession } from '@/lib/shopify';
+import { authNotice } from '@/lib/supabase';
 import { Button, Card, ListItem, Screen, Text } from '@/ui';
 
 import { loadProfileName, signIn, signOut } from './services/session';
@@ -23,6 +24,7 @@ export function IkScreen({ pointsSlot }: IkScreenProps) {
   const name = useAsync(() => (signedIn ? loadProfileName() : Promise.resolve(null)), [signedIn]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const sessionNotice = useSyncExternalStore(authNotice.subscribe, authNotice.get, authNotice.get);
 
   async function onSignIn() {
     setBusy(true);
@@ -69,6 +71,17 @@ export function IkScreen({ pointsSlot }: IkScreenProps) {
           </>
         )}
         {message ? <Notice message={message} onDismiss={() => setMessage(null)} /> : null}
+        {sessionNotice && !message ? (
+          signedIn ? (
+            <Notice
+              message={sessionNotice}
+              action={{ label: 'Log opnieuw in', onPress: () => void onSignIn() }}
+              onDismiss={() => authNotice.set(null)}
+            />
+          ) : (
+            <Notice message={sessionNotice} onDismiss={() => authNotice.set(null)} />
+          )
+        ) : null}
       </Card>
 
       {signedIn ? (pointsSlot ?? null) : null}

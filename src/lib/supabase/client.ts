@@ -3,16 +3,17 @@ import * as SecureStore from 'expo-secure-store';
 
 import { getEnv } from '@/lib/config';
 
+import { createChunkedStorage } from './chunkedStorage';
+
 /**
- * Supabase session storage in the device keychain/keystore.
- * Note: SecureStore values are limited to ~2KB on some platforms; if sessions
- * outgrow that, Backend&Sync swaps in an encrypted-chunk adapter here.
+ * Supabase session storage in the device keychain/keystore. Sessions are larger than
+ * SecureStore's ~2 KB value limit, so they are stored in chunks (chunkedStorage.ts).
  */
-const secureStorage = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
-};
+const secureStorage = createChunkedStorage({
+  getItem: (key) => SecureStore.getItemAsync(key),
+  setItem: (key, value) => SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK }),
+  removeItem: (key) => SecureStore.deleteItemAsync(key),
+});
 
 let client: SupabaseClient | null = null;
 

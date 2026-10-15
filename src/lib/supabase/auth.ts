@@ -1,6 +1,7 @@
 import { getSupabase } from './client';
 import { AuthExchangeResponse, DeleteAccountResponse, FUNCTIONS, type AuthExchangeRequest } from './contracts';
 import { invokeFunction } from './functions';
+import { authNotice, setIntentionalSignOut } from './sessionRecovery';
 
 /**
  * Exchange the Shopify Customer Account access token (from the PKCE login, owned by
@@ -17,10 +18,13 @@ export async function signInWithShopifyToken(shopifyAccessToken: string): Promis
     refresh_token: res.session.refresh_token,
   });
   if (error) throw error;
+  setIntentionalSignOut(false);
+  authNotice.set(null);
   return res;
 }
 
 export async function signOut(): Promise<void> {
+  setIntentionalSignOut(true); // no automatic re-exchange (sessionRecovery.ts)
   await getSupabase().auth.signOut();
 }
 
@@ -31,6 +35,7 @@ export async function signOut(): Promise<void> {
 export async function deleteAccount(): Promise<DeleteAccountResponse> {
   const client = getSupabase();
   const res = await invokeFunction(client, FUNCTIONS.deleteAccount, {}, DeleteAccountResponse);
+  setIntentionalSignOut(true); // the account is gone: never re-exchange into a new one
   await client.auth.signOut({ scope: 'local' }); // server session is already gone
   return res;
 }

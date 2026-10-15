@@ -5,7 +5,18 @@ import { createPointsService } from '@/features/points';
 import { ActiveWorkoutProvider } from '@/features/tracker';
 import { useRepositories, type Repositories } from '@/lib/db';
 import { CustomSyncEngine, createSupabaseSyncAdapter, type CursorStore, type RemoteSyncAdapter, type SyncEngine } from '@/lib/db/sync';
-import { createConsentService, createPtCodeService, currentUserId, getSupabase } from '@/lib/supabase';
+import { customerSession } from '@/lib/shopify';
+import {
+  authNotice,
+  createConsentService,
+  createPtCodeService,
+  currentUserId,
+  getSupabase,
+  isIntentionalSignOut,
+  recoverSupabaseSession,
+  RELOGIN_MESSAGE,
+  signInWithShopifyToken,
+} from '@/lib/supabase';
 
 import { finalSyncThenWipe } from './signOutFlow';
 import { queueWorkoutForPoints, syncThenClaim, type WorkoutPointsDeps } from './workoutPoints';
@@ -108,6 +119,28 @@ export function AppServices({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void syncThenClaim(services.points).catch(() => undefined);
+  }, [services]);
+
+  // M8: Supabase ended the session by itself (refresh token expired/revoked) while the
+  // shop login is still valid → new exchange with a valid Shopify token, else a calm
+  // "Log opnieuw in". Never after our own sign-out or account deletion.
+  useEffect(() => {
+    let sub: { unsubscribe(): void } | null = null;
+    try {
+      sub = getSupabase().auth.onAuthStateChange((event) => {
+        void recoverSupabaseSession(event, {
+          shopifyAccessToken: () => customerSession.accessTokenOrNull(),
+          exchange: (token) => signInWithShopifyToken(token),
+          isSigningOut: isIntentionalSignOut,
+        }).then((r) => {
+          if (r === 'recovered') void syncThenClaim(services.points).catch(() => undefined);
+          if (r === 'login_required') authNotice.set(RELOGIN_MESSAGE);
+        });
+      }).data.subscription;
+    } catch {
+      sub = null; // no Supabase env (signed-out-only build)
+    }
+    return () => sub?.unsubscribe();
   }, [services]);
 
   const onWorkoutFinished = useMemo(
