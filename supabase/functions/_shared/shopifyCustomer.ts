@@ -19,7 +19,7 @@ export type VerifyResult =
   | { ok: true; customerGid: string }
   | { ok: false; reason: 'invalid_token' | 'unavailable'; detail?: string };
 
-/** e.g. https://suppcity.nl/customer/api/2025-10/graphql (storefront domain, pinned version). */
+/** e.g. https://suppcity.nl/customer/api/2026-10/graphql (storefront domain, pinned version). */
 export function customerApiUrl(storefrontDomain: string, override?: string): string {
   if (override) return override;
   const host = storefrontDomain.replace(/^https?:\/\//, '').replace(/\/+$/, '');

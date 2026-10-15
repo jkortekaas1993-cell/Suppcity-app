@@ -40,7 +40,7 @@ Then in the dashboard:
 |---|---|---|
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | all | set automatically by Supabase |
 | `SHOPIFY_STOREFRONT_DOMAIN` | auth-exchange | storefront domain, e.g. `suppcity.nl` |
-| `SHOPIFY_CUSTOMER_API_URL` | auth-exchange | optional override; default `https://<storefront>/customer/api/2025-10/graphql` (check against `https://<storefront>/.well-known/customer-account-api`) |
+| `SHOPIFY_CUSTOMER_API_URL` | auth-exchange | optional override; default `https://<storefront>/customer/api/2026-10/graphql` (check against `https://<storefront>/.well-known/customer-account-api`) |
 | `SHOPIFY_SHOP_DOMAIN` | webhooks, redeem | `<shop>.myshopify.com` |
 | `SHOPIFY_WEBHOOK_SECRET` | webhooks | client secret of the Shopify app that owns the webhook subscriptions |
 | `SHOPIFY_WEBHOOK_SECRET_PREVIOUS` | webhooks | only during secret rotation, then remove |
@@ -50,11 +50,11 @@ Then in the dashboard:
 ## What the shop owner sets up in Shopify
 
 1. **Customer accounts** (new): Settings → Customer accounts → "Customer accounts". Headless/Hydrogen channel → Customer Account API → **public client** (mobile, PKCE), callback URI of the app (Shop&Login). Protected customer data access: only `customer` id is read server-side.
-2. **Custom app** (Dev Dashboard / Settings → Apps → Develop apps), Admin API version **2025-10**, scopes:
+2. **Custom app** (Dev Dashboard / Settings → Apps → Develop apps), Admin API version **2026-10**, scopes:
    - `write_discounts` (+ implied `read_discounts`) – create redemption codes
    - `read_orders` – needed for the `orders/paid` webhook
    - `read_customers` – customer id in order payloads
-3. **Webhook subscriptions** of that app, all to `https://<ref>.supabase.co/functions/v1/shopify-webhooks`, format JSON, API version 2025-10:
+3. **Webhook subscriptions** of that app, all to `https://<ref>.supabase.co/functions/v1/shopify-webhooks`, format JSON, API version 2026-10:
    - `orders/paid`
    - compliance: `customers/data_request`, `customers/redact`, `shop/redact` (Partner/Dev Dashboard → app → Compliance webhooks)
 4. Put the app's **client secret** in `SHOPIFY_WEBHOOK_SECRET` and the **Admin API token** in `SHOPIFY_ADMIN_ACCESS_TOKEN`.

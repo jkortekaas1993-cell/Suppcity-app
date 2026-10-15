@@ -42,7 +42,7 @@ export const DISCOUNT_BY_CODE_QUERY = `query RedeemLookup($code: String!) {
   codeDiscountNodeByCode(code: $code) { id }
 }`;
 
-/** DiscountCodeBasicInput (Admin API 2025-10): fixed amount, one use, only for this customer. */
+/** DiscountCodeBasicInput (Admin API, version pinned in _shared/config.ts): fixed amount, one use, only for this customer. */
 export function buildDiscountInput(r: Redemption, code: string, customerGid: string, now: Date) {
   const endsAt = new Date(now.getTime() + r.valid_days * 86_400_000);
   return {

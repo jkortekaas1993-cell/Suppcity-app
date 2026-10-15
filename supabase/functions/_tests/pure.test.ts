@@ -1,4 +1,5 @@
-import { SHOPIFY_ADMIN_API_VERSION, SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION } from '../_shared/config.ts';
+import { SHOPIFY_API_VERSION as APP_SHOPIFY_API_VERSION } from '../../../src/lib/config/constants.ts';
+import { SHOPIFY_ADMIN_API_VERSION, SHOPIFY_API_VERSION, SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION } from '../_shared/config.ts';
 import { computeShopifyHmac, verifyShopifyHmac } from '../_shared/hmac.ts';
 import { decimalToCents, OrderPaidPayload, pointsForOrder } from '../_shared/orderPoints.ts';
 import { buildDiscountInput, centsToDecimal, deriveDiscountCode, isCodeTaken } from '../_shared/redeem.ts';
@@ -7,9 +8,10 @@ import { assert, assertEquals } from './assert.ts';
 
 const enc = new TextEncoder();
 
-Deno.test('pinned API versions', () => {
-  assertEquals(SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION, '2025-10');
-  assertEquals(SHOPIFY_ADMIN_API_VERSION, '2025-10');
+Deno.test('pinned API versions: one version everywhere, same as the app', () => {
+  assertEquals(SHOPIFY_API_VERSION, APP_SHOPIFY_API_VERSION);
+  assertEquals(SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION, SHOPIFY_API_VERSION);
+  assertEquals(SHOPIFY_ADMIN_API_VERSION, SHOPIFY_API_VERSION);
 });
 
 Deno.test('HMAC: valid, tampered, wrong secret, rotation, garbage header', async () => {
@@ -95,7 +97,7 @@ function fakeFetch(status: number, body: unknown, seen?: { init?: RequestInit; u
 
 Deno.test('customer token verification', async () => {
   const url = customerApiUrl('https://suppcity.nl/');
-  assertEquals(url, 'https://suppcity.nl/customer/api/2025-10/graphql');
+  assertEquals(url, 'https://suppcity.nl/customer/api/2026-10/graphql');
   const seen: { init?: RequestInit } = {};
   const ok = await verifyCustomerToken('tok', url, fakeFetch(200, { data: { customer: { id: 'gid://shopify/Customer/42' } } }, seen));
   assertEquals(ok, { ok: true, customerGid: 'gid://shopify/Customer/42' });
