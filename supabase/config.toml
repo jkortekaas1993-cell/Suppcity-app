@@ -1,11 +1,29 @@
-# Minimal Supabase CLI config. Run `supabase init` locally to regenerate full defaults if needed.
+# Supabase CLI config (local dev + function settings). Run `supabase init` to see all defaults.
 project_id = "suppcity-app"
 
 [db]
 major_version = 15
 
+[auth]
+# Users are created only by shopify-auth-exchange (service role). No public sign-ups.
+enable_signup = false
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+# Credential = Shopify Customer Account token, verified inside the function.
 [functions.shopify-auth-exchange]
 verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.redeem-points]
+verify_jwt = true
+
+# Shopify calls this; authenticity = HMAC, verified inside the function.
+[functions.shopify-webhooks]
+verify_jwt = false
