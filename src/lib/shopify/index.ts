@@ -1,3 +1,7 @@
-export { storefrontEndpoint, storefrontQuery, StorefrontError } from './storefront';
-// Planned (Shop&Login): customerAccount.ts (OAuth PKCE, tokens in expo-secure-store),
-// checkout.ts (@shopify/checkout-sheet-kit wrapper).
+// Public API of the Shopify integration (Storefront + Customer Account).
+export * from './errors';
+export * from './money';
+export type * from './models';
+export type { FetchLike } from './http';
+export { createStorefrontClient, storefrontEndpoint, type StorefrontClient } from './storefront';
+export { getStorefront } from './storefrontDefault';
