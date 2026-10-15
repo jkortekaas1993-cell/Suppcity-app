@@ -18,10 +18,11 @@ Local: `src/lib/db/schema.ts` (SQLite). Server: `supabase/migrations/*.sql` (Pos
 | routine_exercises | ✓ | ✓ | Ordered by `position`; targets + rest time. |
 | workouts | ✓ | ✓ | `source`: app / import_hevy / import_strong. |
 | sets | ✓ | ✓ | `weight_kg`, `reps`, `rpe`, `set_type`. |
-| profiles | – | ✓ | `shopify_customer_id` (server-only), `adult_confirmed_at`, `pt_code`. |
-| consents | – | ✓ | Append-only grant/revoke log; `current_consents` view. |
+| profiles | – | ✓ | `shopify_customer_id` (server-only), `adult_confirmed_at`, `pt_code` (client-set, format `^[A-Z0-9]{4,12}$`, CHECK in 0005). |
+| consents | – | ✓ | Append-only grant/revoke log via RPC `set_consent(type, granted, policy_version)`; `policy_version` = `POLICY_VERSION` in `src/lib/config/constants.ts`; `current_consents` view. |
 | points_ledger | – | ✓ | Append-only, service role writes; `points_balance` view. |
-| stock_items | later local | ✓ | Supply counter → reorder reminders. |
+| stock_items | later local | ✓ | Supply counter → reorder reminders (currently device-local KV in the shop feature). |
+| app_state | ✓ (local only) | – | Active-workout snapshot, rest prefs, sync cursors (`sync:<user>:<push|pull>:<table>`), queued workout-point claims. Never synced; wiped on account deletion. |
 
 ## RLS
 Enabled on every table. Owner policies use `user_id = (select auth.uid())`. `consents` is insert+select only, `points_ledger` select only, `profiles` select+update (no client insert; `shopify_customer_id` protected by trigger). `anon` has no table access.
@@ -35,4 +36,4 @@ Enabled on every table. Owner policies use `user_id = (select auth.uid())`. `con
 | Deleted account | Immediate cascade delete; backups roll off within Supabase's backup window |
 
 ## Export
-CSV export of workouts+sets (Tracker builder), format compatible with Strong/Hevy column names where possible.
+CSV export of workouts+sets (Tracker builder, `Trainen → Data` and `Ik → Gegevens exporteren`), Hevy-compatible columns. Exported as a real `.csv` file via expo-file-system + expo-sharing; import from a picked file (expo-document-picker) or pasted text.

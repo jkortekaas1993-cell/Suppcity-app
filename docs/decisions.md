@@ -37,3 +37,15 @@ Short ADRs. Add a new one at the bottom; do not rewrite old ones (mark them "Sup
 
 ## ADR-9: Expo Notifications
 - **Decision:** `expo-notifications` for rest-timer (local) and stock reminders (local/remote). Ask permission only after the first finished workout; max 1 promotional push per week.
+
+## ADR-10: One pinned Shopify API version for all Shopify APIs
+- **Decision:** `SHOPIFY_API_VERSION = '2026-10'` in `src/lib/config/constants.ts` is used for Storefront, Customer Account AND Admin (Edge Functions mirror it in `supabase/functions/_shared/config.ts`; a test asserts equality). Bumped once per quarter in a dedicated PR.
+- **Why:** On 2026-10-15 shopify.dev lists 2026-01, 2026-04, 2026-07 and 2026-10 as supported stable versions; 2026-10 is "Latest stable", accessible until 2027-10-16 15:00 UTC (shopify.dev/changelog/release-notes/2026-10). 2025-10 is out of the supported window (stable versions get ~12 months; 2025-04 ended 2026-04-16). One value avoids drift between app and server.
+
+## ADR-11: App-shell integration layer
+- **Decision:** `src/integration/` wires features together (account services, sync engine, workout points). Features expose slots/hooks (`registerAccountServices`, `ActiveWorkoutProvider.onWorkoutFinished`, `VandaagScreen.smartCard`, `IkScreen.pointsSlot`) instead of importing each other.
+- **Why:** Keeps the "features only via index.ts" rule and lets each builder own their folder.
+
+## ADR-12: PT code is a plain profile field (for now)
+- **Decision:** `profiles.pt_code` is set by the user on their own row (RLS), format-checked in app and DB. No trainer registry yet, so every well-formed code is accepted. Sharing data with a PT needs the separate `pt_share` consent.
+- **Why:** Minimal, safe MVP; a `trainers` table + server validation can replace it without changing the app contract (`PtCodeService`).

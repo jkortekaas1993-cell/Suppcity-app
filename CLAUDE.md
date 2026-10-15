@@ -31,11 +31,12 @@ Three builders work in parallel. **Only touch files you own.** If a change is ne
 | `supabase/**` (migrations, functions, config) | Backend&Sync |
 | `src/lib/supabase/**`, `src/lib/db/sync/**` (new) | Backend&Sync |
 | `src/features/points/**` | Backend&Sync |
-| `src/ui/**`, `app/_layout.tsx`, `app/(tabs)/_layout.tsx`, `app/index.tsx`, `src/lib/config/**`, `package.json`, `tsconfig.json`, `eslint.config.js`, `app.json`, `.github/**`, `CLAUDE.md`, `docs/**` | **Architect / shared** (small PRs only) |
+| `src/ui/**`, `src/integration/**`, `app/_layout.tsx`, `app/(tabs)/_layout.tsx`, `app/index.tsx`, `src/lib/config/**`, `package.json`, `tsconfig.json`, `eslint.config.js`, `app.json`, `app.config.ts`, `.github/**`, `CLAUDE.md`, `docs/**` | **Architect / shared** (small PRs only) |
 
 Rules for working across features:
 - Features import each other **only through their `index.ts`** (`@/features/shop`). ESLint enforces this.
-- `Vandaag` shows widgets that other features export, such as `ReorderCard` (shop) and `PointsSummaryCard` (points).
+- Cross-feature wiring lives in `src/integration/` (sync engine, account services, workout points) and in route files: `Vandaag` shows exactly **one** smart card in the tracker's slot (`ReorderCard` from shop); `Ik` receives `PointsPanel` from points.
+- App ↔ Edge Function contracts have one source of truth: `src/lib/supabase/contracts.ts` (server copy `supabase/functions/_shared/contracts.ts`). Do not redefine them in features.
 - If a local table changes, the matching Supabase table must change too. The Tracker builder writes the SQLite migration; the Backend&Sync builder writes the matching `supabase/migrations/000N_*.sql`. Agree on this in both PR descriptions.
 
 ## Conventions
@@ -56,14 +57,15 @@ Rules for working across features:
 4. **Only fixed, approved claim sentences** from `src/content/claims.ts`, via `getApprovedClaim()`. Never generate, paraphrase or combine product or health claims.
 5. **Points:** per euro plus at most 3 rewarded workouts per ISO week. No chance mechanics (no spin, no shake-and-win). 18+ only. The server enforces this (trigger on `points_ledger`).
 6. **Shopify tokens are verified server-side only.** RLS is on for **every** table, with policy `user_id = auth.uid()`. The client never writes `shopify_customer_id` or points.
-7. **Versions are pinned.** Exact dependency versions via `npx expo install`, Shopify API version in `src/lib/config/constants.ts`, and updates once per quarter in a separate PR.
+7. **Versions are pinned.** Exact dependency versions via `npx expo install`, ONE Shopify API version (`SHOPIFY_API_VERSION`) in `src/lib/config/constants.ts` for Storefront, Customer Account and Admin, and updates once per quarter in a separate PR.
 8. **The tracker is native** (React Native screens). No webviews for training.
 9. **CSV export and retention periods.** The user can export all training data as CSV. Retention periods are in `RETENTION_DAYS` and `docs/data-model.md`.
 
 ## Version policy
 
 - Expo SDK 54 (React Native 0.81, React 19.1). Add packages with `npx expo install <pkg>` so the version fits the SDK. Run `npm run deps:check` before every release.
-- Shopify Storefront and Customer Account API: `2026-10` (see `constants.ts`). Check once per quarter.
+- Shopify Storefront, Customer Account and Admin API: `2026-10` (`SHOPIFY_API_VERSION` in `constants.ts`; Edge Function mirror in `supabase/functions/_shared/config.ts`, a test keeps them equal). Latest stable on 2026-10-15, supported until 2027-10-16. Check once per quarter (ADR-10).
+- Consent texts: `POLICY_VERSION` in `constants.ts`; bump it when consent copy or the privacy policy changes.
 - Commit `package-lock.json` and use `npm ci` in CI.
 
 ## Running the app
@@ -75,6 +77,8 @@ npx expo start              # Expo Go / dev build; press i (iOS) or a (Android)
 npm run typecheck && npm run lint && npm test
 ```
 
+`app.config.ts` adds the Customer Account callback scheme `shop.<EXPO_PUBLIC_SHOPIFY_SHOP_ID>.app` to `app.json`'s `suppcity` scheme, so set that env var for dev builds and in EAS.
+
 Checkout Kit and the Customer Account login need a **development build** (`npx expo run:ios` / `run:android` or EAS). Expo Go is enough for UI and tracker work.
 
-Supabase locally: `supabase start`, then `supabase db reset` runs `supabase/migrations`.
+Supabase locally: `supabase start`, then `supabase db reset` runs `supabase/migrations`. SQL tests without Docker: `supabase/tests/run.sh` (needs Postgres 16 binaries).
