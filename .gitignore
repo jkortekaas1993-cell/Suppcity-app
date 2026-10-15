@@ -1,0 +1,33 @@
+node_modules/
+.expo/
+dist/
+web-build/
+# expo-env.d.ts is committed so CI typechecks without running expo first
+coverage/
+
+# Native (prebuild output; use config plugins instead)
+/ios
+/android
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.jks
+google-services.json
+GoogleService-Info.plist
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+
+# OS / editors
+.DS_Store
+*.log
+.idea/
+.vscode/*
+!.vscode/extensions.json

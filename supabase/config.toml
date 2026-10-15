@@ -1,0 +1,11 @@
+# Minimal Supabase CLI config. Run `supabase init` locally to regenerate full defaults if needed.
+project_id = "suppcity-app"
+
+[db]
+major_version = 15
+
+[functions.shopify-auth-exchange]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = true

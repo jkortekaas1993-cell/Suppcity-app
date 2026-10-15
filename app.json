@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "Supp City",
+    "slug": "suppcity-app",
+    "scheme": "suppcity",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "nl.suppcity.app",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "nl.suppcity.app",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#1FC7B6"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
