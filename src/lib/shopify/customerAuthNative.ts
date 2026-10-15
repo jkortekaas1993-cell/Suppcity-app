@@ -1,5 +1,4 @@
 import * as Crypto from 'expo-crypto';
-// NOT YET IN package.json — install with: npx expo install expo-web-browser
 import * as WebBrowser from 'expo-web-browser';
 
 import { getEnv } from '@/lib/config';
