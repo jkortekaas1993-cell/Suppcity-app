@@ -52,6 +52,15 @@ describe('parseCsv', () => {
     ]);
     expect(escapeCsvField('plain')).toBe('plain');
   });
+  it('neutralises spreadsheet formulas in text cells, not in numbers', () => {
+    expect(escapeCsvField('=HYPERLINK("http://x","klik")')).toBe('"\'=HYPERLINK(""http://x"",""klik"")"');
+    expect(escapeCsvField('+31 6')).toBe("'+31 6");
+    expect(escapeCsvField('-squat')).toBe("'-squat");
+    expect(escapeCsvField('@SUM(A1)')).toBe("'@SUM(A1)");
+    expect(escapeCsvField('\tx')).toBe("'\tx");
+    expect(escapeCsvField(-2.5)).toBe('-2.5');
+    expect(escapeCsvField('Bankdrukken')).toBe('Bankdrukken');
+  });
 });
 
 describe('dates and durations', () => {

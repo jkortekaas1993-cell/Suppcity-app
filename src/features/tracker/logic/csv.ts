@@ -81,9 +81,17 @@ export function parseCsvObjects(input: string): { headers: string[]; records: Re
   return { headers, records };
 }
 
+/**
+ * CSV/formula injection (OWASP): a text cell starting with = + - @ TAB or CR is run as
+ * a formula by Excel/Sheets. Text (never numbers) gets a leading apostrophe.
+ */
+export function neutraliseFormula(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 export function escapeCsvField(value: string | number | null | undefined, delimiter = ','): string {
   if (value === null || value === undefined) return '';
-  const s = String(value);
+  const s = typeof value === 'number' ? String(value) : neutraliseFormula(value);
   return s.includes('"') || s.includes(delimiter) || s.includes('\n') || s.includes('\r') ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
