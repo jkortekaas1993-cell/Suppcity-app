@@ -33,6 +33,11 @@ export const CONSENT_ORDER: readonly ConsentType[] = [
   'pt_share',
 ];
 
+/** Consents to show: health_sync only once a Health integration exists (C2). */
+export function visibleConsents(features: { healthSync: boolean }): ConsentType[] {
+  return CONSENT_ORDER.filter((t) => t !== 'health_sync' || features.healthSync);
+}
+
 /** Optimistic toggle helper: apply locally, roll back on failure. Pure. */
 export function applyConsent(
   states: readonly ConsentState[],

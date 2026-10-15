@@ -1,6 +1,8 @@
 import { CONSENT_TYPES } from '@/lib/supabase/consents';
 
-import { applyConsent, CONSENT_COPY, CONSENT_ORDER } from '../consentCopy';
+import { FEATURES } from '@/lib/config/constants';
+
+import { applyConsent, CONSENT_COPY, CONSENT_ORDER, visibleConsents } from '../consentCopy';
 
 describe('consents (hard rule 2)', () => {
   it('toggles one consent without touching the others', () => {
@@ -16,5 +18,11 @@ describe('consents (hard rule 2)', () => {
   it('has Dutch copy for exactly the backend consent types', () => {
     expect([...CONSENT_ORDER].sort()).toEqual([...CONSENT_TYPES].sort());
     expect(Object.keys(CONSENT_COPY).sort()).toEqual([...CONSENT_TYPES].sort());
+  });
+  it('hides the health_sync toggle until a Health integration exists (C2)', () => {
+    expect(FEATURES.healthSync).toBe(false);
+    expect(visibleConsents(FEATURES)).not.toContain('health_sync');
+    expect(visibleConsents({ healthSync: true })).toContain('health_sync');
+    expect(visibleConsents(FEATURES)).toHaveLength(CONSENT_ORDER.length - 1);
   });
 });

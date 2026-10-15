@@ -20,6 +20,15 @@ export const SHOPIFY_CUSTOMER_ACCOUNT_API_VERSION = SHOPIFY_API_VERSION;
  */
 export const POLICY_VERSION = '2026-10-15';
 
+/**
+ * Feature flags for things that are not built yet. A consent toggle may only be shown
+ * for a processing that actually exists (compliance C2).
+ */
+export const FEATURES = {
+  /** Apple Health / Health Connect integration. Off until it ships. */
+  healthSync: false,
+} as const;
+
 /** Points rules (hard rule 5). Server is authoritative; these mirror it for UI only. */
 export const POINTS = {
   perEuroSpent: 1,

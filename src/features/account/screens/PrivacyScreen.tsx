@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
 
 import { LoadState, Notice, SubScreen } from '@/features/shop';
-import { POLICY_VERSION } from '@/lib/config';
+import { FEATURES, POLICY_VERSION } from '@/lib/config';
 import { useCustomerSession } from '@/lib/shopify';
 import type { ConsentState, ConsentType } from '@/lib/supabase';
 import { Card, Text, useTheme } from '@/ui';
 
-import { applyConsent, CONSENT_COPY, CONSENT_ORDER } from '../consentCopy';
+import { applyConsent, CONSENT_COPY, visibleConsents } from '../consentCopy';
 import { getAccountServices } from '../services/registry';
 
 /**
@@ -67,7 +67,7 @@ export function PrivacyScreen() {
         </Text>
       ) : null}
       <Card style={{ padding: 0 }}>
-        {CONSENT_ORDER.map((type) => {
+        {visibleConsents(FEATURES).map((type) => {
           const state = states.find((s) => s.type === type);
           const copy = CONSENT_COPY[type];
           return (
