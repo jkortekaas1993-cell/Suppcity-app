@@ -16,3 +16,7 @@ export {
   signOutFromShopify,
   type SignInResult,
 } from './customerAuthNative';
+export { preloadCheckout, presentCheckout, type CheckoutHandlers } from './checkout';
+export { secureKv } from './secureKv';
+export type { KeyValueStore } from './customerSession';
+export { customerSession, useCustomerSession, type CustomerSessionStatus } from './customerSessionStore';

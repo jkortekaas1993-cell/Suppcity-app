@@ -40,6 +40,13 @@ export interface ProductDetail extends ProductSummary {
   variants: ProductVariant[];
   /** True when the only variant is Shopify's implicit "Default Title". */
   hasOnlyDefaultVariant: boolean;
+  /** Product page on suppcity.nl, null when not published to the Online Store. */
+  onlineStoreUrl: string | null;
+  /**
+   * Raw claim ids from the `suppcity.claim_ids` metafield. The UI only renders them
+   * through getApprovedClaim() (hard rule 4); unknown/unapproved ids render nothing.
+   */
+  claimIds: string[];
 }
 
 export interface VariantAvailability {

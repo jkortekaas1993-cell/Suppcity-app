@@ -40,6 +40,9 @@ export const productDetailSchema = productCardSchema.extend({
   description: z.string(),
   vendor: nullableString,
   productType: nullableString,
+  onlineStoreUrl: nullableString,
+  /** Metafield suppcity.claim_ids (list.single_line_text_field → JSON string array). */
+  claimIds: z.object({ value: z.string() }).nullable().optional(),
   images: z.object({ nodes: z.array(imageSchema) }),
   variants: z.object({ nodes: z.array(variantSchema) }),
 });

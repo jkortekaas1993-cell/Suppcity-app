@@ -2,7 +2,7 @@ import { ShopifyApiError, userMessageFor } from '../errors';
 import type { FetchLike } from '../http';
 import { formatMoney, parseMoney } from '../money';
 import { createStorefrontClient, storefrontEndpoint } from '../storefront';
-import { mapProductDetail } from '../storefrontMappers';
+import { mapProductDetail, parseClaimIds } from '../storefrontMappers';
 import { productDetailSchema } from '../storefrontSchemas';
 
 const eur = (amount: string) => ({ amount, currencyCode: 'EUR' });
@@ -151,6 +151,8 @@ describe('product mapping', () => {
       description: 'Puur',
       vendor: 'Supp City',
       productType: null,
+      onlineStoreUrl: 'https://suppcity.nl/products/creatine',
+      claimIds: { value: '["creatine_performance", 3]' },
       images: { nodes: [{ url: 'https://cdn/x.jpg', altText: '' }] },
       variants: {
         nodes: [
@@ -170,5 +172,13 @@ describe('product mapping', () => {
     expect(p.hasOnlyDefaultVariant).toBe(true);
     expect(p.images[0]?.alt).toBe('Creatine');
     expect(p.variants[0]?.compareAtPrice?.cents).toBe(2995);
+    expect(p.claimIds).toEqual(['creatine_performance']);
+    expect(p.onlineStoreUrl).toBe('https://suppcity.nl/products/creatine');
+  });
+
+  it('ignores malformed claim metafields', () => {
+    expect(parseClaimIds('not json')).toEqual([]);
+    expect(parseClaimIds('{"a":1}')).toEqual([]);
+    expect(parseClaimIds(null)).toEqual([]);
   });
 });

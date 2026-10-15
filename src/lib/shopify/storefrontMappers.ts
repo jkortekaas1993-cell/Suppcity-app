@@ -62,6 +62,17 @@ export function mapVariant(raw: RawVariant, productTitle: string): ProductVarian
   };
 }
 
+/** Metafield value is a JSON array of strings; anything else yields []. */
+export function parseClaimIds(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export function mapProductDetail(raw: RawProductDetail): ProductDetail {
   const variants = raw.variants.nodes.map((v) => mapVariant(v, raw.title));
   const only = variants.length === 1 ? variants[0] : undefined;
@@ -72,6 +83,8 @@ export function mapProductDetail(raw: RawProductDetail): ProductDetail {
     images: raw.images.nodes.map((i) => mapImage(i, raw.title)).filter((i): i is ShopImage => i !== null),
     variants,
     hasOnlyDefaultVariant: only !== undefined && only.title === DEFAULT_VARIANT_TITLE,
+    onlineStoreUrl: raw.onlineStoreUrl ?? null,
+    claimIds: parseClaimIds(raw.claimIds?.value),
   };
 }
 

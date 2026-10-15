@@ -92,6 +92,8 @@ export const PRODUCT_QUERY = /* GraphQL */ `
       description
       vendor
       productType
+      onlineStoreUrl
+      claimIds: metafield(namespace: "suppcity", key: "claim_ids") { value }
       images(first: 10) { nodes { ${IMAGE} } }
       variants(first: 50) {
         nodes {

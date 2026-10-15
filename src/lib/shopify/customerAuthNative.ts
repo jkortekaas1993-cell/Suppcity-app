@@ -1,5 +1,4 @@
 import * as Crypto from 'expo-crypto';
-import * as SecureStore from 'expo-secure-store';
 // NOT YET IN package.json — install with: npx expo install expo-web-browser
 import * as WebBrowser from 'expo-web-browser';
 
@@ -16,6 +15,7 @@ import {
 } from './customerAccount';
 import { createTokenManager, type KeyValueStore, type TokenManager } from './customerSession';
 import { ShopifyApiError } from './errors';
+import { secureKv } from './secureKv';
 import { defaultFetch, type FetchLike } from './http';
 import {
   buildAuthorizationUrl,
@@ -30,11 +30,7 @@ import {
  * React Native wiring for the Customer Account API login (OAuth 2.0 + PKCE, public client).
  * Uses an in-app auth session (ASWebAuthenticationSession / Custom Tabs) via expo-web-browser.
  */
-const secureStore: KeyValueStore = {
-  getItem: (k) => SecureStore.getItemAsync(k),
-  setItem: (k, v) => SecureStore.setItemAsync(k, v, { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK }),
-  removeItem: (k) => SecureStore.deleteItemAsync(k),
-};
+const secureStore: KeyValueStore = secureKv;
 
 const fetchImpl: FetchLike = (url, init) => defaultFetch()(url, init);
 const randomBytes = (n: number) => Crypto.getRandomBytes(n);
