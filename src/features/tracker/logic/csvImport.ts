@@ -165,7 +165,6 @@ export function parseHevyCsv(text: string): ImportResult {
       },
       set: {
         exerciseName: d.exercise_title.trim(),
-        order: num(d.set_index) ?? 0,
         setType: hevySetType(d.set_type),
         weightKg: kg === null ? null : nonNegative(roundKg(kg)),
         reps: nonNegative(num(d.reps)),
@@ -226,7 +225,6 @@ export function parseStrongCsv(text: string, opts: { weightUnit?: 'kg' | 'lbs' }
       },
       set: {
         exerciseName: d['Exercise Name'].trim(),
-        order: num(d['Set Order']) ?? 0,
         setType,
         weightKg: kg === null ? null : nonNegative(roundKg(kg)),
         reps: nonNegative(num(d.Reps)),
@@ -244,7 +242,7 @@ type RowOutcome =
   | {
       key: string;
       workout: Omit<ImportedWorkout, 'sets' | 'source'>;
-      set: Omit<ImportedSet, 'position'> & { order: number };
+      set: Omit<ImportedSet, 'position'>;
     };
 
 function groupWorkouts(
@@ -267,8 +265,7 @@ function groupWorkouts(
       groups.set(out.key, w);
     }
     // Position is workout-wide in file order (exercises stay grouped as exported).
-    const { order: _order, ...set } = out.set;
-    w.sets.push({ ...set, position: w.sets.length });
+    w.sets.push({ ...out.set, position: w.sets.length });
   });
   const workouts = [...groups.values()].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   return { workouts, warnings };

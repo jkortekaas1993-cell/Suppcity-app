@@ -102,7 +102,15 @@ export function RoutineScreen() {
     }
     setSaving(true);
     try {
-      const rows = items.map(({ name: _n, id: _id, ...rest }, i) => ({ ...rest, position: i }));
+      const rows: NewRow<RoutineExercise>[] = items.map((it, i) => ({
+        routine_id: it.routine_id,
+        exercise_id: it.exercise_id,
+        position: i,
+        target_sets: it.target_sets,
+        target_reps_min: it.target_reps_min,
+        target_reps_max: it.target_reps_max,
+        rest_seconds: it.rest_seconds,
+      }));
       if (isNew) {
         const position = (await repos.routines.maxPosition()) + 1;
         const r = await repos.routines.create({ name: trimmed, notes: null, program_slug: null, position }, rows);
