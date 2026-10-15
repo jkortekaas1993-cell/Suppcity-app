@@ -26,9 +26,11 @@ jobs:
       # `npm ci` as soon as package-lock.json is committed; `npm install` only until then
       # (the lockfile is generated in CI: download the package-lock artifact and commit it).
       - name: Install
-        run: if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+        run: |
+          if [ -f package-lock.json ]; then npm ci
+          else npm install --no-audit --no-fund && echo "GENERATED_LOCK=1" >> "$GITHUB_ENV"; fi
       - name: Upload generated lockfile (until it is committed)
-        if: ${{ hashFiles('package-lock.json') != '' && github.event_name == 'push' }}
+        if: env.GENERATED_LOCK == '1'
         uses: actions/upload-artifact@v4
         with:
           name: package-lock
