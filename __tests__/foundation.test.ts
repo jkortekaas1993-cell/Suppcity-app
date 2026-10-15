@@ -2,7 +2,7 @@ import { CLAIMS, getApprovedClaim } from '@/content/claims';
 import { EXERCISES_NL } from '@/content/exercises.nl';
 import { PROGRAMS } from '@/content/programs';
 import { pointsForOrder, workoutPointsAvailable } from '@/features/points/rules';
-import { formatElapsed } from '@/features/tracker/ActiveWorkoutBar';
+import { formatElapsed } from '@/features/tracker/logic/format';
 import { parseEnv } from '@/lib/config/env';
 import { migrate, type MigratableDb } from '@/lib/db/migrate';
 import { LATEST_SCHEMA_VERSION, migrations } from '@/lib/db/schema';

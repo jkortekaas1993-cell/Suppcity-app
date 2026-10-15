@@ -2,6 +2,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ActiveWorkoutProvider } from '@/features/tracker';
 import { DatabaseProvider } from '@/lib/db';
 import { ThemeProvider, useTheme } from '@/ui';
 
@@ -27,7 +28,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <DatabaseProvider>
-          <RootStack />
+          <ActiveWorkoutProvider>
+            <RootStack />
+          </ActiveWorkoutProvider>
         </DatabaseProvider>
       </ThemeProvider>
     </SafeAreaProvider>

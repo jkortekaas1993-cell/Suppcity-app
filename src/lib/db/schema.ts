@@ -97,6 +97,21 @@ CREATE INDEX IF NOT EXISTS sets_workout_idx ON sets(workout_id, position);
 CREATE INDEX IF NOT EXISTS sets_exercise_idx ON sets(exercise_id, completed_at DESC);
 `,
   },
+  {
+    version: 2,
+    name: 'local_app_state_and_history_indexes',
+    // app_state is LOCAL ONLY (never synced, not in TRACKER_TABLES): the
+    // in-progress workout snapshot, per-exercise rest preferences, seed version.
+    sql: `
+CREATE TABLE IF NOT EXISTS app_state (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS sets_exercise_workout_idx ON sets(exercise_id, workout_id);
+CREATE INDEX IF NOT EXISTS workouts_ended_idx ON workouts(ended_at);
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1]?.version ?? 0;
