@@ -26,3 +26,23 @@ export interface PointsLedgerEntry {
   iso_week: string | null;
   created_at: string;
 }
+
+export interface PointsRedeemTier {
+  id: string;
+  points: number;
+  value_cents: number;
+  min_order_cents: number;
+  valid_days: number;
+}
+
+export interface PointsRedemption {
+  id: string;
+  tier_id: string;
+  points: number;
+  value_cents: number;
+  min_order_cents: number;
+  status: 'pending' | 'issued' | 'failed';
+  discount_code: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
