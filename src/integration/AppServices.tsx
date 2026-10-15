@@ -7,6 +7,7 @@ import { useRepositories, type Repositories } from '@/lib/db';
 import { CustomSyncEngine, createSupabaseSyncAdapter, type CursorStore, type RemoteSyncAdapter, type SyncEngine } from '@/lib/db/sync';
 import { createConsentService, createPtCodeService, currentUserId, getSupabase } from '@/lib/supabase';
 
+import { finalSyncThenWipe } from './signOutFlow';
 import { queueWorkoutForPoints, syncThenClaim, type WorkoutPointsDeps } from './workoutPoints';
 
 /**
@@ -80,6 +81,19 @@ export function createAppServices(repos: Repositories): { engine: SyncEngine; po
       },
       async onAccountDeleted() {
         await repos.wipeLocalData(); // also drops sync cursors and pending point claims
+      },
+      async onSigningOut({ force }) {
+        // Last push while the Supabase session still exists, then the same wipe as
+        // account deletion: rows stamped with this user_id must not stay on the device.
+        const res = await finalSyncThenWipe(
+          {
+            hasBackendSession: async () => (await safeUserId()) !== null,
+            syncNow: () => engine.syncNow(),
+            wipeLocalData: () => repos.wipeLocalData(),
+          },
+          { force },
+        );
+        return res.status;
       },
     },
   });

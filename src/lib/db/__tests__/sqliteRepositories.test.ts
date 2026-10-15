@@ -39,18 +39,18 @@ maybe('sqlite repositories', () => {
     expect(list[0]).toMatchObject({ id: w1.id, set_count: 2, volume_kg: 655, exercise_count: 1 });
 
     // Upsert is a no-op when nothing changed (updated_at stays put).
-    const before = await repos.sync.changesSince('sets', null);
+    const before = await repos.sync.changesSince('sets', null, 'u1');
     tick();
     await repos.sets.upsertMany([
       { id: 's1', workout_id: w1.id, exercise_id: 'bench-press-barbell', position: 0, set_type: 'normal', weight_kg: 80, reps: 5, rpe: null, completed_at: '2026-10-01T10:05:00.000Z' },
     ]);
-    const after = await repos.sync.changesSince('sets', null);
+    const after = await repos.sync.changesSince('sets', null, 'u1');
     expect(after.find((r) => r.id === 's1')?.updated_at).toBe(before.find((r) => r.id === 's1')?.updated_at);
 
     tick();
     await repos.workouts.softDelete(w1.id);
     expect(await repos.workouts.historyWithStats({ limit: 10 })).toEqual([]);
-    const changed = await repos.sync.changesSince('sets', '2026-10-15T10:00:01.000Z');
+    const changed = await repos.sync.changesSince('sets', '2026-10-15T10:00:01.000Z', 'u1');
     expect(changed.every((r) => r.deleted_at !== null)).toBe(true);
     expect(changed).toHaveLength(3);
   });
@@ -90,7 +90,7 @@ maybe('sqlite repositories', () => {
     const rows = await repos.dataPort.exportRows();
     expect(rows.map((r) => [r.exercise_name, r.weight_kg])).toEqual([['Bankdrukken (halter)', 80], ['Zercher Carry', 60]]);
     // Only custom exercises are offered to sync.
-    const ex = await repos.sync.changesSince('exercises', null);
+    const ex = await repos.sync.changesSince('exercises', null, 'u1');
     expect(ex.map((e) => e.id)).toEqual(['custom-1']);
     expect(ex[0]?.is_custom).toBe(true);
   });
@@ -120,6 +120,22 @@ maybe('sqlite repositories', () => {
     expect(await repos.sync.getByIds('routines', ['r1'])).toEqual([]);
     expect(await repos.appState.get('sync:u2:push:routines')).toBeNull();
     expect(await repos.exercises.get('bench-press-barbell')).toMatchObject({ slug: 'bench-press-barbell' });
-    await expect(repos.sync.changesSince('profiles', null)).rejects.toThrow();
+    await expect(repos.sync.changesSince('profiles', null, 'u1')).rejects.toThrow();
+  });
+
+  it('changesSince returns only own and anonymous rows; sign-out wipe leaves nothing for the next user (H1)', async () => {
+    const { repos } = await setup();
+    const base = { routine_id: null, started_at: '2026-10-01T10:00:00.000Z', ended_at: null, notes: null, source: 'app' as const };
+    await repos.workouts.start({ ...base, title: 'anon' });
+    await repos.workouts.start({ ...base, title: 'mine', user_id: 'u1' });
+    await repos.workouts.start({ ...base, title: 'previous user', user_id: 'u0' });
+    const titles = (await repos.sync.changesSince('workouts', null, 'u1')).map((r) => r.title).sort();
+    expect(titles).toEqual(['anon', 'mine']);
+
+    await repos.appState.set('sync:u0:pull:workouts', '{"serverUpdatedAt":"x","id":"y"}');
+    await repos.wipeLocalData();
+    expect(await repos.workouts.historyWithStats({ limit: 10 })).toEqual([]);
+    expect(await repos.sync.changesSince('workouts', null, 'u2')).toEqual([]);
+    expect(await repos.appState.get('sync:u0:pull:workouts')).toBeNull();
   });
 });

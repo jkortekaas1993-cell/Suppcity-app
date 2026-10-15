@@ -6,4 +6,4 @@ export { OrdersScreen } from './screens/OrdersScreen';
 export { PrivacyScreen } from './screens/PrivacyScreen';
 export { PtCodeScreen } from './screens/PtCodeScreen';
 export { registerAccountServices, type AccountLifecycle } from './services/registry';
-export { signIn, signOut } from './services/session';
+export { signIn, signOut, type SignOutOutcome } from './services/session';

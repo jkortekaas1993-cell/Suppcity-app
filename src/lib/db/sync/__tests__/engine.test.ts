@@ -1,5 +1,5 @@
 import { CustomSyncEngine } from '../engine';
-import { fromRemote, toRemote } from '../mapping';
+import { fromRemote, isOwnedBy, toRemote } from '../mapping';
 import { mergeRow } from '../merge';
 import { backoffDelay, isRetryableError, withRetry } from '../retry';
 import { keysetFilter } from '../supabaseAdapter';
@@ -41,8 +41,10 @@ function fakeDevice() {
   const tables = new Map<SyncTable, Map<string, Record<string, unknown>>>();
   const tbl = (t: SyncTable) => tables.get(t) ?? tables.set(t, new Map()).get(t)!;
   const store: LocalSyncStore = {
-    async changesSince(t, after) {
-      return [...tbl(t).values()].filter((r) => !after || Date.parse(String(r.updated_at)) > Date.parse(after));
+    async changesSince(t, after, userId) {
+      return [...tbl(t).values()].filter(
+        (r) => (r.user_id == null || r.user_id === userId) && (!after || Date.parse(String(r.updated_at)) > Date.parse(after)),
+      );
     },
     async getByIds(t, ids) {
       return ids.map((id) => tbl(t).get(id)).filter((r): r is Record<string, unknown> => !!r);
@@ -159,6 +161,22 @@ describe('CustomSyncEngine', () => {
     const [r1, r2] = [e.syncNow(), e.syncNow()];
     expect(r1).toBe(r2);
     await r1;
+  });
+
+  it('never pushes rows of another account left on the device (H1)', async () => {
+    const server = fakeServer();
+    const d = fakeDevice();
+    d.tbl('workouts').set('old', workout('old', 'previous user', '2026-10-14T10:00:00.000Z', { user_id: 'u0' }));
+    d.tbl('workouts').set('anon', workout('anon', 'signed out', '2026-10-14T10:01:00.000Z'));
+    // a store that ignores the filter must still not leak foreign rows
+    const leaky = { ...d.store, changesSince: async (t: SyncTable) => [...d.tbl(t).values()] };
+    const e = new CustomSyncEngine({ local: leaky, remote: server.adapter, cursors: memCursors(), getUserId: async () => 'u1', retry: noSleep });
+    const r = await e.syncNow();
+    expect(r.ok).toBe(true);
+    expect([...server.tbl('workouts').keys()]).toEqual(['anon']);
+    expect(server.tbl('workouts').get('anon')?.user_id).toBe('u1');
+    expect(isOwnedBy({ user_id: 'u0' }, 'u1')).toBe(false);
+    expect(isOwnedBy({ user_id: null }, 'u1')).toBe(true);
   });
 
   it('never pushes built-in exercises; maps custom exercise columns', async () => {

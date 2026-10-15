@@ -13,6 +13,12 @@ export interface AccountLifecycle {
   onSignedIn(info: { userId: string; isNewUser: boolean; adultConfirmed: boolean }): Promise<void>;
   /** After `delete-account` succeeded: wipe all local tracker data (hard rule 3). */
   onAccountDeleted(): Promise<void>;
+  /**
+   * BEFORE the sessions end: one last sync, then wipe local tracker data, app_state
+   * and sync cursors so the next account on this device starts clean. Returns
+   * 'unsynced' (and wipes nothing) when the final sync failed and `force` is false.
+   */
+  onSigningOut(opts: { force: boolean }): Promise<'wiped' | 'unsynced'>;
 }
 
 interface AccountServices {

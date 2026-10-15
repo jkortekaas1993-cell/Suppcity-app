@@ -579,13 +579,13 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
   }
 
   const sync: SyncSource = {
-    async changesSince(table, updatedAfter) {
+    async changesSince(table, updatedAfter, uid) {
       const t = assertTable(table);
       // Built-in library exercises ship with the app and are never synced.
       const extra = t === 'exercises' ? 'AND is_custom = 1' : '';
       const rows = await db.getAllAsync<Record<string, unknown>>(
-        `SELECT * FROM ${t} WHERE (? IS NULL OR updated_at > ?) ${extra} ORDER BY updated_at`,
-        [updatedAfter, updatedAfter],
+        `SELECT * FROM ${t} WHERE (? IS NULL OR updated_at > ?) AND (user_id IS NULL OR user_id = ?) ${extra} ORDER BY updated_at`,
+        [updatedAfter, updatedAfter, uid],
       );
       return decodeSyncRows(t, rows);
     },

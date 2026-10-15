@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
+import { Alert } from 'react-native';
 
 import { useAsync, Notice } from '@/features/shop';
 import { useCustomerSession } from '@/lib/shopify';
@@ -32,6 +33,23 @@ export function IkScreen({ pointsSlot }: IkScreenProps) {
     if (res.status === 'signed_in' && res.message) setMessage(res.message);
   }
 
+  async function onSignOut(force = false) {
+    setBusy(true);
+    setMessage(null);
+    const res = await signOut({ force });
+    setBusy(false);
+    if (res.status === 'unsynced') {
+      Alert.alert(
+        'Niet alles is gesynchroniseerd',
+        'Je trainingen konden niet worden opgeslagen in je account. Als je nu uitlogt, worden ze van dit toestel verwijderd.',
+        [
+          { text: 'Ingelogd blijven', style: 'cancel' },
+          { text: 'Toch uitloggen', style: 'destructive', onPress: () => void onSignOut(true) },
+        ],
+      );
+    }
+  }
+
   return (
     <Screen title="Ik" subtitle="Account, toestemmingen en je gegevens.">
       <Card eyebrow="Account">
@@ -39,7 +57,10 @@ export function IkScreen({ pointsSlot }: IkScreenProps) {
           <>
             <Text variant="heading">{name.data ? `Hoi ${name.data}` : 'Je bent ingelogd'}</Text>
             <Text tone="muted">Eén account voor suppcity.nl en de app.</Text>
-            <Button label="Uitloggen" variant="ghost" onPress={() => void signOut()} />
+            <Text variant="caption" tone="muted">
+              Bij uitloggen worden je trainingen eerst opgeslagen in je account en daarna van dit toestel gewist.
+            </Text>
+            <Button label="Uitloggen" variant="ghost" loading={busy} onPress={() => void onSignOut()} />
           </>
         ) : (
           <>

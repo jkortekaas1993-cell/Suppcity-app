@@ -57,7 +57,26 @@ export async function signIn(): Promise<SignInOutcome> {
   }
 }
 
-export async function signOut(): Promise<void> {
+export type SignOutOutcome = { status: 'signed_out' } | { status: 'unsynced' };
+
+/**
+ * Sign out (review H1): first a last sync, then wipe this account's local data
+ * (trainingen, app_state incl. sync cursors, voorraadteller, winkelwagen), then end
+ * the Shopify and Supabase sessions. If the last sync fails, nothing happens and the
+ * UI asks whether to sign out anyway (`force`), which loses unsynced trainingen.
+ */
+export async function signOut(opts: { force?: boolean } = {}): Promise<SignOutOutcome> {
+  const lifecycle = getAccountServices().lifecycle;
+  if (lifecycle) {
+    const local = await lifecycle.onSigningOut({ force: opts.force ?? false });
+    if (local === 'unsynced') return { status: 'unsynced' };
+  }
+  await stockStore.clear().catch(() => undefined);
+  await endSessions();
+  return { status: 'signed_out' };
+}
+
+async function endSessions(): Promise<void> {
   await Promise.allSettled([signOutFromShopify(), signOutBackend()]);
   await cartStore.reset(); // the cart carried the buyer identity
   customerSession.markSignedOut();
@@ -78,7 +97,7 @@ export async function deleteAccount(): Promise<{ ok: true } | { ok: false; messa
   }
   await stockStore.clear();
   await getAccountServices().lifecycle?.onAccountDeleted().catch(() => undefined);
-  await signOut();
+  await endSessions(); // server data is gone: no final sync
   return { ok: true };
 }
 

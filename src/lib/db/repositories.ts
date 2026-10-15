@@ -142,7 +142,8 @@ export interface AppStateRepository {
  * rows. Structurally satisfies `LocalSyncStore` in src/lib/db/sync/types.ts.
  */
 export interface SyncSource {
-  changesSince(table: string, updatedAfter: IsoDateTime | null): Promise<Record<string, unknown>[]>;
+  /** Only rows of `userId` or without owner (user_id IS NULL): never another account's rows. */
+  changesSince(table: string, updatedAfter: IsoDateTime | null, userId: Uuid): Promise<Record<string, unknown>[]>;
   /** Rows by id (incl. soft-deleted), same shape as `changesSince`; missing ids are omitted. */
   getByIds(table: string, ids: string[]): Promise<Record<string, unknown>[]>;
   /** Writes already-merged rows verbatim: keeps their updated_at, no LWW check, no bump. */

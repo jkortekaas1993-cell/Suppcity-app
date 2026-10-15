@@ -55,8 +55,12 @@ export interface RemoteSyncAdapter {
  * Rows are in the LOCAL format (SQLite types); the engine converts.
  */
 export interface LocalSyncStore {
-  /** Rows (incl. soft-deleted) with updated_at > updatedAfter (null = all). */
-  changesSince(table: SyncTable, updatedAfter: string | null): Promise<Record<string, unknown>[]>;
+  /**
+   * Rows (incl. soft-deleted) with updated_at > updatedAfter (null = all), limited to
+   * rows of `userId` or without owner (user_id IS NULL). Rows of another account that
+   * used this device are never returned (they would be rejected by RLS forever).
+   */
+  changesSince(table: SyncTable, updatedAfter: string | null, userId: string): Promise<Record<string, unknown>[]>;
   /** Rows by id, incl. soft-deleted; missing ids are omitted. */
   getByIds(table: SyncTable, ids: string[]): Promise<Record<string, unknown>[]>;
   /** Write already-merged rows verbatim (keep their updated_at; no bump). */

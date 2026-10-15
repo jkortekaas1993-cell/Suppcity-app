@@ -1,4 +1,4 @@
-import { fromRemote, isSyncable, toRemote } from './mapping';
+import { fromRemote, isOwnedBy, isSyncable, toRemote } from './mapping';
 import { chunk, maxUpdatedAt, mergeRow, rewind } from './merge';
 import { withRetry, type RetryOptions } from './retry';
 import {
@@ -100,9 +100,9 @@ export class CustomSyncEngine implements SyncEngine {
   private async pushTable(userId: string, table: SyncTable): Promise<number> {
     const key = this.key(userId, 'push', table);
     const cursor = (await this.o.cursors.get(key)) || null;
-    const changed = await this.o.local.changesSince(table, rewind(cursor, this.o.pushOverlapMs));
+    const changed = await this.o.local.changesSince(table, rewind(cursor, this.o.pushOverlapMs), userId);
     const rows: SyncRow[] = changed
-      .filter((r) => isSyncable(table, r))
+      .filter((r) => isOwnedBy(r, userId) && isSyncable(table, r))
       .map((r) => toRemote(table, r, userId))
       .sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at));
     let pushed = 0;

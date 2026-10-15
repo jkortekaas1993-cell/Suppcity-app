@@ -39,6 +39,12 @@ export function isSyncable(table: SyncTable, local: Record<string, unknown>): bo
   return true;
 }
 
+/** A local row may be pushed for `userId` only if it is theirs or still anonymous. */
+export function isOwnedBy(local: Record<string, unknown>, userId: string): boolean {
+  return local.user_id === null || local.user_id === undefined || local.user_id === userId;
+}
+
+/** Callers must check `isOwnedBy` first: user_id is stamped, never re-assigned across accounts. */
 export function toRemote(table: SyncTable, local: Record<string, unknown>, userId: string): SyncRow {
   const r = pick(table, local);
   r.user_id = userId;
