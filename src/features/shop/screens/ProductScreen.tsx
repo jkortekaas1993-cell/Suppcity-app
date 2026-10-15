@@ -1,9 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Image, Linking, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { formatMoney, getStorefront } from '@/lib/shopify';
-import { Button, Card, Text, useTheme } from '@/ui';
+import { Button, Card, ListItem, Text, useTheme } from '@/ui';
 
 import { Chip } from '../components/Chip';
 import { LoadState } from '../components/LoadState';
@@ -11,6 +11,7 @@ import { Notice } from '../components/Notice';
 import { Stepper } from '../components/Stepper';
 import { SubScreen } from '../components/SubScreen';
 import { approvedClaimsFor } from '../logic/claims';
+import { productFacts, productPageUrl } from '../logic/productInfo';
 import { cartStore, useCart } from '../state/cartStore';
 import { useAsync } from '../state/useAsync';
 
@@ -32,6 +33,9 @@ export function ProductScreen() {
   const variant = p?.variants.find((v) => v.id === variantId) ?? null;
   // Hard rule 4: only approved, verbatim claim sentences.
   const claims = p ? approvedClaimsFor(p.claimIds) : [];
+  // C1: the free-text Shopify description is never shown in the app (may hold
+  // unapproved claims). Only name, variant, price, contents and approved claims.
+  const facts = p ? productFacts(p, variant) : [];
   const images = variant?.image ? [variant.image, ...(p?.images ?? []).filter((i) => i.url !== variant.image?.url)] : (p?.images ?? []);
 
   const footer = p ? (
@@ -125,7 +129,23 @@ export function ProductScreen() {
             </Card>
           ) : null}
 
-          {p.description ? <Text>{p.description}</Text> : null}
+          {facts.length > 0 ? (
+            <Card style={{ padding: 0 }}>
+              {facts.map((f) => (
+                <ListItem key={f.label} title={f.label} value={f.value} />
+              ))}
+            </Card>
+          ) : null}
+
+          <Text
+            tone="muted"
+            accessibilityRole="link"
+            accessibilityHint="Opent suppcity.nl in je browser"
+            style={{ paddingVertical: space.md }}
+            onPress={() => void Linking.openURL(productPageUrl(p)).catch(() => undefined)}
+          >
+            Volledige productinformatie op suppcity.nl ›
+          </Text>
           {p.vendor ? (
             <Text variant="caption" tone="muted">
               Merk: {p.vendor}

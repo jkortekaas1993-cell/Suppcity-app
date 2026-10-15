@@ -1,6 +1,7 @@
 import { CLAIMS } from '@/content/claims';
 
 import { approvedClaimsFor } from '../logic/claims';
+import { productFacts, productPageUrl } from '../logic/productInfo';
 
 describe('approvedClaimsFor (hard rule 4)', () => {
   it('renders nothing for unapproved, unknown or prototype ids', () => {
@@ -17,5 +18,22 @@ describe('approvedClaimsFor (hard rule 4)', () => {
       claim.approvedBy = before.by;
       claim.approvedAt = before.at;
     }
+  });
+});
+
+describe('product info without the free-text description (C1)', () => {
+  it('shows variant options as facts, never the description', () => {
+    const variant = { options: [{ name: 'Inhoud', value: '500 g' }, { name: 'Smaak', value: 'Vanille' }] };
+    expect(productFacts({ hasOnlyDefaultVariant: false }, variant)).toEqual([
+      { label: 'Inhoud', value: '500 g' },
+      { label: 'Smaak', value: 'Vanille' },
+    ]);
+    expect(productFacts({ hasOnlyDefaultVariant: true }, variant)).toEqual([]);
+    expect(productFacts({ hasOnlyDefaultVariant: false }, { options: [{ name: 'Title', value: 'Default Title' }] })).toEqual([]);
+  });
+  it('links only to https suppcity.nl', () => {
+    expect(productPageUrl({ handle: 'creatine', onlineStoreUrl: 'https://suppcity.nl/products/creatine' })).toBe('https://suppcity.nl/products/creatine');
+    expect(productPageUrl({ handle: 'creatine', onlineStoreUrl: 'https://evil.example/x' })).toBe('https://suppcity.nl/products/creatine');
+    expect(productPageUrl({ handle: 'a b', onlineStoreUrl: null })).toBe('https://suppcity.nl/products/a%20b');
   });
 });
