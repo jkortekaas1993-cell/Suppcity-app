@@ -26,6 +26,10 @@ export interface PointsService {
   redeem(req: RedeemPointsRequest): Promise<RedeemPointsResponse>;
   /** Call after a workout is finished AND synced. Server decides eligibility. */
   claimWorkoutPoints(workoutId: string): Promise<WorkoutPointsResult>;
+  /** Has the user confirmed being 18+ (hard rule 5)? */
+  adultConfirmed(): Promise<boolean>;
+  /** One-time 18+ self-declaration via the `confirm_adult` RPC (server timestamp). */
+  confirmAdult(): Promise<void>;
 }
 
 const LedgerRow = z.object({
@@ -75,6 +79,16 @@ export function createPointsService(client: SupabaseClient): PointsService {
       if (error) throw error;
       return z.enum(WORKOUT_POINTS_RESULTS).parse(data);
     },
+    async adultConfirmed() {
+      const { data, error } = await client.from('profiles').select('adult_confirmed_at').maybeSingle();
+      if (error) throw error;
+      return z.object({ adult_confirmed_at: z.string().nullable() }).nullable().parse(data)?.adult_confirmed_at != null;
+    },
+    async confirmAdult() {
+      // The client cannot write adult_confirmed_at itself (0006_hardening.sql).
+      const { error } = await client.rpc('confirm_adult');
+      if (error) throw error;
+    },
   };
 }
 
@@ -100,5 +114,7 @@ export function ledgerLabel(entry: Pick<PointsLedgerEntry, 'reason'>): string {
 export function canAfford(balance: number, tier: Pick<PointsRedeemTier, 'points'>): boolean {
   return balance >= tier.points;
 }
+
+export const ADULT_CONFIRM_TEXT = 'Bevestig dat je 18 jaar of ouder bent om punten te sparen.';
 
 export const POINTS_RULES_TEXT = `1 punt per euro en ${POINTS.perWorkout} punten per training (max. ${POINTS.maxWorkoutsRewardedPerWeek} per week). Vanaf 18 jaar.`;

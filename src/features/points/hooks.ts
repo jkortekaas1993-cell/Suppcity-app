@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-  FunctionCallError,
   getSupabase,
   type PointsLedgerEntry,
   type PointsRedeemTier,
   type RedeemPointsResponse,
 } from '@/lib/supabase';
 
+import { redeemErrorMessage } from './errors';
+import { redeemTier, resumePendingRedemption, type PendingRedemptionStore, type RedeemOutcome } from './redeemFlow';
 import { createPointsService, type PointsService } from './service';
 
 export interface PointsState {
@@ -52,55 +53,90 @@ export function usePoints(service?: PointsService): PointsState {
 
 export type RedeemState =
   | { status: 'idle' }
-  | { status: 'busy'; tierId: string }
+  | { status: 'busy'; tierId: string | null }
   | { status: 'done'; result: RedeemPointsResponse }
   | { status: 'error'; message: string; retryable: boolean };
 
-export function redeemErrorMessage(e: unknown): { message: string; retryable: boolean } {
-  const code = e instanceof FunctionCallError ? e.code : 'network';
-  switch (code) {
-    case 'insufficient_points':
-      return { message: 'Je hebt niet genoeg punten.', retryable: false };
-    case 'not_linked':
-      return { message: 'Log in met je Supp City-account om punten in te wisselen.', retryable: false };
-    case 'redeem_failed':
-      return { message: 'Inwisselen is mislukt. Je punten zijn teruggezet.', retryable: false };
-    case 'redeem_pending':
-    case 'network':
-      return { message: 'Geen verbinding met de shop. Probeer het opnieuw.', retryable: true };
-    default:
-      return { message: 'Er ging iets mis. Probeer het later opnieuw.', retryable: true };
-  }
-}
+export { redeemErrorMessage };
 
 /**
- * Redeem with a stable idempotency key: retries of the same tier reuse the same
- * redemptionId, so a lost response can never debit twice.
+ * Redeem with a stable idempotency key that survives an app restart (review M5):
+ * the key lives in `store` (app_state) until the server gives a definitive answer.
+ * On mount, a redemption left over from an earlier run is finished first.
  */
-export function useRedeem(newId: () => string, service?: PointsService, onDone?: () => void) {
+export function useRedeem(newId: () => string, store: PendingRedemptionStore, service?: PointsService, onDone?: () => void) {
   const svc = useMemo(() => service ?? createPointsService(getSupabase()), [service]);
   const [state, setState] = useState<RedeemState>({ status: 'idle' });
-  const pending = useRef<{ tierId: string; redemptionId: string } | null>(null);
+
+  const apply = useCallback(
+    (out: RedeemOutcome) => {
+      setState(out.status === 'done' ? { status: 'done', result: out.result } : out);
+      if (out.status === 'done') onDone?.();
+    },
+    [onDone],
+  );
+
+  useEffect(() => {
+    let alive = true;
+    void resumePendingRedemption(svc, store)
+      .then((out) => {
+        if (alive && out) apply(out);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [svc, store, apply]);
 
   const redeem = useCallback(
     async (tierId: string) => {
-      if (!pending.current || pending.current.tierId !== tierId) {
-        pending.current = { tierId, redemptionId: newId() };
-      }
       setState({ status: 'busy', tierId });
-      try {
-        const result = await svc.redeem(pending.current);
-        pending.current = null;
-        setState({ status: 'done', result });
-        onDone?.();
-      } catch (e) {
-        const { message, retryable } = redeemErrorMessage(e);
-        if (!retryable) pending.current = null;
-        setState({ status: 'error', message, retryable });
-      }
+      apply(await redeemTier(svc, store, tierId, newId));
     },
-    [svc, newId, onDone],
+    [svc, store, newId, apply],
   );
 
   return { state, redeem, reset: () => setState({ status: 'idle' }) };
+}
+
+export interface AdultState {
+  confirmed: boolean | null;
+  busy: boolean;
+  error: string | null;
+  confirm: () => Promise<void>;
+}
+
+/** 18+ self-declaration (hard rule 5); null while unknown. */
+export function useAdultConfirmation(service?: PointsService, onConfirmed?: () => void): AdultState {
+  const svc = useMemo(() => service ?? createPointsService(getSupabase()), [service]);
+  const [confirmed, setConfirmed] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    svc
+      .adultConfirmed()
+      .then((v) => alive && setConfirmed(v))
+      .catch(() => alive && setConfirmed(null));
+    return () => {
+      alive = false;
+    };
+  }, [svc]);
+
+  const confirm = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await svc.confirmAdult();
+      setConfirmed(true);
+      onConfirmed?.();
+    } catch {
+      setError('Bevestigen lukte niet. Probeer het later opnieuw.');
+    } finally {
+      setBusy(false);
+    }
+  }, [svc, onConfirmed]);
+
+  return { confirmed, busy, error, confirm };
 }

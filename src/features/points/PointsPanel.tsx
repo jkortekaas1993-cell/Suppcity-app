@@ -1,10 +1,12 @@
+import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { newId } from '@/lib/db';
+import { newId, useRepositories } from '@/lib/db';
 import { Button, Card, ListItem, Text, useTheme } from '@/ui';
 
-import { usePoints, useRedeem } from './hooks';
-import { canAfford, formatEuroCents, ledgerLabel, POINTS_RULES_TEXT } from './service';
+import { useAdultConfirmation, usePoints, useRedeem } from './hooks';
+import { PENDING_REDEMPTION_KEY, type PendingRedemption, type PendingRedemptionStore } from './redeemFlow';
+import { ADULT_CONFIRM_TEXT, canAfford, formatEuroCents, ledgerLabel, POINTS_RULES_TEXT } from './service';
 
 /**
  * Minimal points section for the Ik tab (signed-in users only): balance, redeem
@@ -12,8 +14,33 @@ import { canAfford, formatEuroCents, ledgerLabel, POINTS_RULES_TEXT } from './se
  */
 export function PointsPanel() {
   const { space } = useTheme();
+  const repos = useRepositories();
   const points = usePoints();
-  const { state, redeem } = useRedeem(newId, undefined, points.refresh);
+  // The idempotency key survives an app restart (local app_state, wiped on sign-out).
+  const pendingStore = useMemo<PendingRedemptionStore>(
+    () => ({
+      get: () => repos.appState.get<PendingRedemption>(PENDING_REDEMPTION_KEY),
+      set: (p) => repos.appState.set(PENDING_REDEMPTION_KEY, p),
+      clear: () => repos.appState.remove(PENDING_REDEMPTION_KEY),
+    }),
+    [repos],
+  );
+  const { state, redeem } = useRedeem(newId, pendingStore, undefined, points.refresh);
+  const adult = useAdultConfirmation(undefined, points.refresh);
+
+  if (adult.confirmed === false) {
+    // One-time, calm 18+ step (hard rule 5). The server stores its own timestamp.
+    return (
+      <Card eyebrow="Punten">
+        <Text>{ADULT_CONFIRM_TEXT}</Text>
+        <Text variant="caption" tone="muted">
+          {POINTS_RULES_TEXT} Je bevestigt dit één keer; trainen werkt altijd, ook zonder punten.
+        </Text>
+        {adult.error ? <Text tone="danger">{adult.error}</Text> : null}
+        <Button variant="secondary" label="Ik ben 18 jaar of ouder" loading={adult.busy} onPress={() => void adult.confirm()} />
+      </Card>
+    );
+  }
 
   return (
     <>
