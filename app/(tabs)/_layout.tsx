@@ -13,7 +13,7 @@ export default function TabsLayout() {
       // The active-workout bar is rendered above the tab bar on every tab.
       tabBar={(props) => (
         <View>
-          <ActiveWorkoutBar onPress={() => props.navigation.navigate('trainen')} />
+          <ActiveWorkoutBar />
           <BottomTabBar {...props} />
         </View>
       )}
