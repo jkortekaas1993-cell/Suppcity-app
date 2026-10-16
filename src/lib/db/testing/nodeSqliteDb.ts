@@ -1,6 +1,7 @@
 import { migrate, type MigratableDb } from '../migrate';
 import type { Repositories } from '../repositories';
 import { createSqliteRepositories, type SqlDb, type SqlValue } from '../sqliteRepositories';
+import { createTransactionQueue } from '../txQueue';
 
 /**
  * TEST-ONLY helper: runs the real repository SQL against Node's built-in
@@ -34,7 +35,8 @@ export function openNodeSqlite(): SqlDb & MigratableDb {
   if (!Ctor) throw new Error('node:sqlite is not available');
   const raw = new Ctor(':memory:');
   const plain = <T>(row: unknown): T => ({ ...(row as object) }) as T;
-  return {
+  const queue = createTransactionQueue();
+  const db: SqlDb & MigratableDb = {
     async execAsync(sql) {
       raw.exec(sql);
     },
@@ -48,17 +50,22 @@ export function openNodeSqlite(): SqlDb & MigratableDb {
       const r = raw.prepare(sql).get(...params);
       return r === undefined ? null : plain<T>(r);
     },
-    async withTransactionAsync(task) {
-      raw.exec('BEGIN');
-      try {
-        await task();
-        raw.exec('COMMIT');
-      } catch (e) {
-        raw.exec('ROLLBACK');
-        throw e;
-      }
+    withExclusiveTransactionAsync(task) {
+      // Same queueing as the app adapter (expoSqlDb.ts); one connection, so `tx` runs on `raw` too.
+      const tx: SqlDb = { ...db, withExclusiveTransactionAsync: () => Promise.reject(new Error('Nested transaction on the local database')) };
+      return queue.run(async () => {
+        raw.exec('BEGIN');
+        try {
+          await task(tx);
+          raw.exec('COMMIT');
+        } catch (e) {
+          raw.exec('ROLLBACK');
+          throw e;
+        }
+      });
     },
   };
+  return db;
 }
 
 /** Migrated, seeded in-memory repositories with deterministic ids and a controllable clock. */

@@ -33,7 +33,7 @@ import type {
  * expo-sqlite implementation of the repository contracts.
  *
  * Depends only on the small `SqlDb` subset of expo-sqlite's async API
- * (`runAsync` / `getAllAsync` / `getFirstAsync` / `withTransactionAsync`), so it
+ * (`runAsync` / `getAllAsync` / `getFirstAsync` / `withExclusiveTransactionAsync`), so it
  * has no Expo imports and can be exercised in Node against any SQLite driver.
  *
  * Every write sets `updated_at`; deletes are soft (`deleted_at`) so they sync.
@@ -45,7 +45,13 @@ export interface SqlDb {
   runAsync(sql: string, params: SqlValue[]): Promise<unknown>;
   getAllAsync<T>(sql: string, params: SqlValue[]): Promise<T[]>;
   getFirstAsync<T>(sql: string, params: SqlValue[]): Promise<T | null>;
-  withTransactionAsync(task: () => Promise<void>): Promise<void>;
+  /**
+   * Runs `task` in an exclusive write transaction (expo-sqlite 16
+   * `withExclusiveTransactionAsync`). Every query of the task MUST go through `tx`:
+   * the outer handle is not part of the transaction. Transactions on one database are
+   * queued, so never open a transaction from inside another one (it would wait forever).
+   */
+  withExclusiveTransactionAsync(task: (tx: SqlDb) => Promise<void>): Promise<void>;
 }
 
 export interface RepositoryDeps {
@@ -135,9 +141,9 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
   };
 
   // --- routines ----------------------------------------------------------------
-  async function insertRoutineExercises(routineId: Uuid, items: NewRow<RoutineExercise>[], now: IsoDateTime) {
+  async function insertRoutineExercises(q: SqlDb, routineId: Uuid, items: NewRow<RoutineExercise>[], now: IsoDateTime) {
     for (const e of items) {
-      await db.runAsync(
+      await q.runAsync(
         `INSERT INTO routine_exercises (id, user_id, routine_id, exercise_id, position, target_sets, target_reps_min, target_reps_max, rest_seconds, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -183,13 +189,13 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
         updated_at: now,
         deleted_at: null,
       };
-      await db.withTransactionAsync(async () => {
-        await db.runAsync(
+      await db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.runAsync(
           `INSERT INTO routines (id, user_id, name, notes, program_slug, position, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [routine.id, routine.user_id, routine.name, routine.notes, routine.program_slug, routine.position, now, now],
         );
-        await insertRoutineExercises(routine.id, items, now);
+        await insertRoutineExercises(tx, routine.id, items, now);
       });
       return routine;
     },
@@ -217,20 +223,20 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     },
     async replaceExercises(routineId, items) {
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
-        await db.runAsync(
+      await db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.runAsync(
           `UPDATE routine_exercises SET deleted_at = ?, updated_at = ? WHERE routine_id = ? AND ${NOT_DELETED}`,
           [now, now, routineId],
         );
-        await insertRoutineExercises(routineId, items, now);
-        await db.runAsync('UPDATE routines SET updated_at = ? WHERE id = ?', [now, routineId]);
+        await insertRoutineExercises(tx, routineId, items, now);
+        await tx.runAsync('UPDATE routines SET updated_at = ? WHERE id = ?', [now, routineId]);
       });
     },
     async softDelete(id) {
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
-        await db.runAsync('UPDATE routines SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
-        await db.runAsync(
+      await db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.runAsync('UPDATE routines SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+        await tx.runAsync(
           `UPDATE routine_exercises SET deleted_at = ?, updated_at = ? WHERE routine_id = ? AND ${NOT_DELETED}`,
           [now, now, id],
         );
@@ -330,9 +336,9 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     },
     async softDelete(id) {
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
-        await db.runAsync('UPDATE workouts SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
-        await db.runAsync(`UPDATE sets SET deleted_at = ?, updated_at = ? WHERE workout_id = ? AND ${NOT_DELETED}`, [
+      await db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.runAsync('UPDATE workouts SET deleted_at = ?, updated_at = ? WHERE id = ?', [now, now, id]);
+        await tx.runAsync(`UPDATE sets SET deleted_at = ?, updated_at = ? WHERE workout_id = ? AND ${NOT_DELETED}`, [
           now,
           now,
           id,
@@ -393,9 +399,9 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     async upsertMany(rows) {
       if (rows.length === 0) return;
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
+      await db.withExclusiveTransactionAsync(async (tx) => {
         for (const r of rows) {
-          await db.runAsync(
+          await tx.runAsync(
             `INSERT INTO sets (${SET_COLUMNS}, created_at, updated_at) VALUES (${placeholders(12)})
              ON CONFLICT(id) DO UPDATE SET
                exercise_id = excluded.exercise_id, position = excluded.position, set_type = excluded.set_type,
@@ -495,9 +501,9 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
       let imported = 0;
       let skipped = 0;
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
+      await db.withExclusiveTransactionAsync(async (tx) => {
         for (const e of newExercises) {
-          await db.runAsync(
+          await tx.runAsync(
             `INSERT INTO exercises (id, user_id, slug, name_nl, primary_muscle, secondary_muscles, equipment, is_custom, created_at, updated_at)
              VALUES (?, ?, NULL, ?, ?, ?, ?, 1, ?, ?)`,
             [
@@ -513,7 +519,7 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
           );
         }
         for (const { workout, sets: items2 } of items) {
-          const exists = await db.getFirstAsync<{ id: string }>(
+          const exists = await tx.getFirstAsync<{ id: string }>(
             `SELECT id FROM workouts WHERE source = ? AND started_at = ? AND ${NOT_DELETED} LIMIT 1`,
             [workout.source, workout.started_at],
           );
@@ -522,7 +528,7 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
             continue;
           }
           const workoutId = workout.id ?? deps.newId();
-          await db.runAsync(
+          await tx.runAsync(
             `INSERT INTO workouts (id, user_id, routine_id, title, started_at, ended_at, notes, source, created_at, updated_at)
              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
             [
@@ -539,7 +545,7 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
             ],
           );
           for (const s of items2) {
-            await db.runAsync(`INSERT INTO sets (${SET_COLUMNS}, created_at, updated_at) VALUES (${placeholders(12)})`, [
+            await tx.runAsync(`INSERT INTO sets (${SET_COLUMNS}, created_at, updated_at) VALUES (${placeholders(12)})`, [
               ...setParams({ ...s, id: s.id ?? deps.newId(), workout_id: workoutId }),
               now,
               now,
@@ -587,14 +593,14 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
       if (rows.length === 0) return [];
       const inserted: string[] = [];
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
+      await db.withExclusiveTransactionAsync(async (tx) => {
         for (const r of rows) {
-          const exists = await db.getFirstAsync<{ id: string }>(
+          const exists = await tx.getFirstAsync<{ id: string }>(
             `SELECT id FROM user_badges WHERE badge_id = ? AND ${NOT_DELETED}`,
             [r.badge_id],
           );
           if (exists) continue;
-          await db.runAsync(
+          await tx.runAsync(
             `INSERT INTO user_badges (id, user_id, badge_id, earned_at, source_ref, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [deps.newId(), userId(), r.badge_id, r.earned_at, r.source_ref, now, now],
@@ -656,7 +662,7 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     async applyRemote(table, rows) {
       const t = assertTable(table);
       const cols = await columnsOf(t);
-      await db.withTransactionAsync(async () => {
+      await db.withExclusiveTransactionAsync(async (tx) => {
         for (const raw of rows) {
           const row: Record<string, SqlValue> = {};
           for (const [k, v] of Object.entries(raw)) {
@@ -672,7 +678,7 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
           // (it would drop a merged sticky delete) and updated_at is never bumped
           // (that would echo every pulled row back to the server).
           const updates = keys.filter((k) => k !== 'id' && k !== 'created_at').map((k) => `${k} = excluded.${k}`);
-          await db.runAsync(
+          await tx.runAsync(
             `INSERT INTO ${t} (${keys.join(', ')}) VALUES (${placeholders(keys.length)})
              ON CONFLICT(id) DO UPDATE SET ${updates.join(', ')}`,
             keys.map((k) => row[k] ?? null),
@@ -682,10 +688,10 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     },
     async claimAnonymousRows(uid) {
       const now = deps.now();
-      await db.withTransactionAsync(async () => {
+      await db.withExclusiveTransactionAsync(async (tx) => {
         for (const t of TRACKER_TABLES) {
           const extra = t === 'exercises' ? 'AND is_custom = 1' : '';
-          await db.runAsync(`UPDATE ${t} SET user_id = ?, updated_at = ? WHERE user_id IS NULL ${extra}`, [uid, now]);
+          await tx.runAsync(`UPDATE ${t} SET user_id = ?, updated_at = ? WHERE user_id IS NULL ${extra}`, [uid, now]);
         }
       });
     },
@@ -693,10 +699,10 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
 
   async function seedLibrary(): Promise<void> {
     const now = deps.now();
-    await db.withTransactionAsync(async () => {
+    await db.withExclusiveTransactionAsync(async (tx) => {
       for (const e of EXERCISES_NL) {
         const muscles = JSON.stringify(e.secondary_muscles);
-        await db.runAsync(
+        await tx.runAsync(
           `INSERT INTO exercises (id, user_id, slug, name_nl, primary_muscle, secondary_muscles, equipment, is_custom, created_at, updated_at)
            VALUES (?, NULL, ?, ?, ?, ?, ?, 0, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
@@ -710,12 +716,19 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     });
   }
 
-  async function wipeLocalData(): Promise<void> {
-    await db.withTransactionAsync(async () => {
+  async function wipeLocalData(opts: { keepAppStatePrefixes?: readonly string[] } = {}): Promise<void> {
+    const keep = (opts.keepAppStatePrefixes ?? []).filter((p) => p.length > 0);
+    await db.withExclusiveTransactionAsync(async (tx) => {
       // Children first (foreign keys), then the local-only app_state (incl. sync cursors).
-      for (const t of ['sets', 'routine_exercises', 'workouts', 'routines', 'exercises', 'user_badges', 'app_state'] as const) {
-        await db.runAsync(`DELETE FROM ${t}`, []);
+      for (const t of ['sets', 'routine_exercises', 'workouts', 'routines', 'exercises', 'user_badges'] as const) {
+        await tx.runAsync(`DELETE FROM ${t}`, []);
       }
+      // substr() instead of LIKE: a prefix may contain '_' or '%'.
+      const kept = keep.map(() => 'substr(key, 1, ?) = ?').join(' OR ');
+      await tx.runAsync(
+        `DELETE FROM app_state${kept ? ` WHERE NOT (${kept})` : ''}`,
+        keep.flatMap((p) => [p.length, p]),
+      );
     });
     columnCache.clear();
     await seedLibrary();

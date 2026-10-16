@@ -1,6 +1,7 @@
 import { SQLiteProvider, useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
+import { expoSqlDb } from './expoSqlDb';
 import { migrate } from './migrate';
 import type { Repositories } from './repositories';
 import { createSqliteRepositories, type SqlDb } from './sqliteRepositories';
@@ -8,24 +9,31 @@ import { newId, nowIso } from './uuid';
 
 export const DATABASE_NAME = 'suppcity.db';
 
-/** expo-sqlite's SQLiteDatabase satisfies the SqlDb subset used by the repositories. */
-function asSqlDb(db: SQLiteDatabase): SqlDb {
-  return {
-    runAsync: (sql, params) => db.runAsync(sql, params),
-    getAllAsync: (sql, params) => db.getAllAsync(sql, params),
-    getFirstAsync: (sql, params) => db.getFirstAsync(sql, params),
-    withTransactionAsync: (task) => db.withTransactionAsync(task),
-  };
+export function createRepositories(db: SQLiteDatabase): Repositories {
+  return createSqliteRepositories(expoSqlDb(db), { newId, now: nowIso });
 }
 
-export function createRepositories(db: SQLiteDatabase): Repositories {
-  return createSqliteRepositories(asSqlDb(db), { newId, now: nowIso });
-}
+// The ONE app connection (the provider's), for code outside React: app start, notification
+// actions, wipe and export. Nobody opens a second connection to the database file.
+let resolveShared: ((db: SqlDb) => void) | null = null;
+let sharedDb: Promise<SqlDb> = new Promise((resolve) => (resolveShared = resolve));
 
 async function onInit(db: SQLiteDatabase) {
   await migrate(db);
   // Idempotent: only writes rows whose library data changed.
   await createRepositories(db).seedLibrary();
+  const handle = expoSqlDb(db);
+  if (resolveShared) {
+    resolveShared(handle);
+    resolveShared = null;
+  } else {
+    sharedDb = Promise.resolve(handle); // provider re-mounted (fast refresh)
+  }
+}
+
+/** The provider's connection as `SqlDb`; resolves once migrations and seeding are done. */
+export function getSharedDatabase(): Promise<SqlDb> {
+  return sharedDb;
 }
 
 const RepositoriesContext = createContext<Repositories | null>(null);

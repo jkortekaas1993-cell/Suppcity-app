@@ -11,7 +11,9 @@ export interface MigratableDb {
  * its own transaction. Migrations are append-only: never edit a shipped one.
  */
 export async function migrate(db: MigratableDb, migrations: Migration[] = allMigrations): Promise<number> {
-  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  // busy_timeout: exclusive transactions run on their own connection (see expoSqlDb.ts);
+  // plain writes on this connection wait for them instead of failing with SQLITE_BUSY.
+  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let current = row?.user_version ?? 0;
 

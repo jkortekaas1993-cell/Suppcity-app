@@ -173,9 +173,11 @@ export interface Repositories {
   /** Inserts/updates the built-in exercise library (idempotent). */
   seedLibrary(): Promise<void>;
   /**
-   * Hard rule 3: after the account is deleted, removes ALL local tracker data and
-   * local app state (incl. sync cursors and the active-workout snapshot), then
+   * Hard rule 3: after the account is deleted (and on sign-out), removes ALL local tracker
+   * data and local app state (incl. sync cursors and the active-workout snapshot), then
    * re-seeds the built-in library so the app keeps working signed-out.
+   * `keepAppStatePrefixes`: app_state keys starting with one of these survive (sign-out
+   * keeps the owner-scoped, local-only supplement settings; account deletion keeps nothing).
    */
-  wipeLocalData(): Promise<void>;
+  wipeLocalData(opts?: { keepAppStatePrefixes?: readonly string[] }): Promise<void>;
 }

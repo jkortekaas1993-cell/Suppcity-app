@@ -138,4 +138,19 @@ maybe('sqlite repositories', () => {
     expect(await repos.sync.changesSince('workouts', null, 'u2')).toEqual([]);
     expect(await repos.appState.get('sync:u0:pull:workouts')).toBeNull();
   });
+
+  it('sign-out wipe keeps app_state keys with a kept prefix (local-only supplement settings)', async () => {
+    const { repos } = await setup();
+    await repos.appState.set('supplements.reminders@u1', { enabled: true });
+    await repos.appState.set('supplements.trainingDays', 3);
+    await repos.appState.set('supplementsX', 1);
+    await repos.appState.set('tracker.weeklyGoal', 4);
+    await repos.wipeLocalData({ keepAppStatePrefixes: ['supplements.'] });
+    expect(await repos.appState.get('supplements.reminders@u1')).toEqual({ enabled: true });
+    expect(await repos.appState.get('supplements.trainingDays')).toBe(3);
+    expect(await repos.appState.get('supplementsX')).toBeNull();
+    expect(await repos.appState.get('tracker.weeklyGoal')).toBeNull();
+    await repos.wipeLocalData();
+    expect(await repos.appState.get('supplements.trainingDays')).toBeNull();
+  });
 });
