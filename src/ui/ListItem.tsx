@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
 
-import { Text } from './Text';
-import { HIT_SLOP_MIN } from './theme';
-import { useTheme } from './ThemeProvider';
+import { ListRow } from './ListRow';
 
 export interface ListItemProps {
   title: string;
@@ -15,40 +12,21 @@ export interface ListItemProps {
   testID?: string;
 }
 
+/**
+ * @deprecated Release-1 row. Use `ListRow` (same props plus chevron, done, trailing, icon wells).
+ * Kept as a thin wrapper so existing screens compile: always draws a divider, no chevron.
+ */
 export function ListItem({ title, subtitle, value, leading, onPress, testID }: ListItemProps) {
-  const { colors, space } = useTheme();
   return (
-    <Pressable
-      testID={testID}
+    <ListRow
+      title={title}
+      subtitle={subtitle}
+      value={value}
+      leading={leading}
       onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
-      style={({ pressed }) => ({
-        minHeight: HIT_SLOP_MIN + space.sm,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.md,
-        paddingVertical: space.md,
-        paddingHorizontal: space.lg,
-        backgroundColor: pressed ? colors.surfaceRaised : 'transparent',
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-      })}
-    >
-      {leading}
-      <View style={{ flex: 1, gap: space.xxs }}>
-        <Text variant="heading">{title}</Text>
-        {subtitle ? (
-          <Text variant="caption" tone="muted">
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {value ? (
-        <Text variant="heading" style={{ fontVariant: ['tabular-nums'] }}>
-          {value}
-        </Text>
-      ) : null}
-    </Pressable>
+      testID={testID}
+      divider
+      chevron={false}
+    />
   );
 }

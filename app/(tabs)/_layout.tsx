@@ -1,46 +1,71 @@
 import { BottomTabBar } from '@react-navigation/bottom-tabs';
+import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import { View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { ActiveWorkoutBar } from '@/features/tracker';
-import { TabIcon, useTheme } from '@/ui';
+import { haptics, TabIcon, Text, useTheme, type TabIconName } from '@/ui';
+
+const TABS: { name: TabIconName; title: string }[] = [
+  { name: 'vandaag', title: 'Vandaag' },
+  { name: 'trainen', title: 'Trainen' },
+  { name: 'shop', title: 'Shop' },
+  { name: 'ik', title: 'Ik' },
+];
 
 export default function TabsLayout() {
-  const { colors } = useTheme();
+  const { colors, type } = useTheme();
+  const ios = Platform.OS === 'ios';
   return (
     <Tabs
       initialRouteName="vandaag"
-      // The active-workout bar is rendered above the tab bar on every tab.
+      // The active-workout bar is rendered above the tab bar on every tab. The bar stack stays in
+      // the layout flow (not absolute) so no screen content is ever hidden behind it.
       tabBar={(props) => (
         <View>
           <ActiveWorkoutBar />
           <BottomTabBar {...props} />
         </View>
       )}
+      screenListeners={{ tabPress: () => haptics.selection() }}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', fontSize: 10 },
+        tabBarInactiveTintColor: colors.text3,
+        tabBarStyle: {
+          backgroundColor: ios ? colors.barBg : colors.bg0,
+          borderTopColor: colors.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          elevation: 0,
+        },
+        tabBarBackground: ios
+          ? () => <BlurView tint="dark" intensity={40} style={StyleSheet.absoluteFill} />
+          : undefined,
+        tabBarItemStyle: { paddingTop: 6 },
       }}
     >
-      <Tabs.Screen
-        name="vandaag"
-        options={{ title: 'Vandaag', tabBarIcon: ({ color }) => <TabIcon name="vandaag" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="trainen"
-        options={{ title: 'Trainen', tabBarIcon: ({ color }) => <TabIcon name="trainen" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="shop"
-        options={{ title: 'Shop', tabBarIcon: ({ color }) => <TabIcon name="shop" color={color} /> }}
-      />
-      <Tabs.Screen
-        name="ik"
-        options={{ title: 'Ik', tabBarIcon: ({ color }) => <TabIcon name="ik" color={color} /> }}
-      />
+      {TABS.map((t) => (
+        <Tabs.Screen
+          key={t.name}
+          name={t.name}
+          options={{
+            title: t.title,
+            tabBarAccessibilityLabel: t.title,
+            tabBarIcon: ({ color, focused }) => <TabIcon name={t.name} color={color} focused={focused} />,
+            tabBarLabel: ({ color, focused }) => (
+              <Text
+                style={[
+                  focused ? type.button : type.micro,
+                  { color, fontSize: 11, lineHeight: 14, marginTop: 2 },
+                ]}
+                numberOfLines={1}
+              >
+                {t.title}
+              </Text>
+            ),
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

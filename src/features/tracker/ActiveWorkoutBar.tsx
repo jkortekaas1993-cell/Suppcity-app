@@ -1,8 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
-
-import { Text, useTheme } from '@/ui';
+import { LiveBar } from '@/ui';
 
 import { useActiveWorkout } from './activeWorkoutStore';
 import { formatCountdown, formatElapsed } from './logic/format';
@@ -22,7 +20,6 @@ interface ActiveWorkoutBarProps {
 export function ActiveWorkoutBar({ onPress }: ActiveWorkoutBarProps) {
   const workout = useActiveWorkout();
   const router = useRouter();
-  const { colors, space } = useTheme();
   const [now, setNow] = useState(() => Date.now());
 
   const active = workout !== null;
@@ -42,47 +39,16 @@ export function ActiveWorkoutBar({ onPress }: ActiveWorkoutBarProps) {
   const time = resting ? formatCountdown(restLeft) : formatElapsed(now - workout.startedAt);
 
   return (
-    <Pressable
+    <LiveBar
       testID="active-workout-bar"
-      accessibilityRole="button"
+      status={resting ? 'Rust' : 'Bezig'}
+      title={workout.title}
+      time={time}
+      progress={resting ? progress : undefined}
       accessibilityLabel={
         resting ? `Rust, nog ${time}. Training ${workout.title} openen` : `Actieve training ${workout.title}, ${time}, openen`
       }
       onPress={onPress ?? (() => router.push('/workout'))}
-      style={({ pressed }) => ({
-        backgroundColor: pressed ? colors.border : colors.surfaceRaised,
-        borderTopWidth: 2,
-        borderTopColor: colors.accent,
-      })}
-    >
-      {resting ? (
-        <View
-          style={{ position: 'absolute', top: -2, left: 0, height: 2, width: `${progress * 100}%`, backgroundColor: colors.text }}
-        />
-      ) : null}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: space.md,
-          paddingHorizontal: space.lg,
-          paddingVertical: space.sm,
-          minHeight: 56,
-        }}
-      >
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent }} />
-        <View style={{ flex: 1 }}>
-          <Text variant="label" tone="accent">
-            {resting ? 'Rust' : 'Bezig'}
-          </Text>
-          <Text variant="heading" numberOfLines={1}>
-            {workout.title}
-          </Text>
-        </View>
-        <Text variant="metric" style={{ fontSize: 22 }}>
-          {time}
-        </Text>
-      </View>
-    </Pressable>
+    />
   );
 }
