@@ -42,7 +42,7 @@ jobs:
         run: |
           if ! eas build --platform "${{ inputs.platform }}" --profile "${{ inputs.profile }}" \
             --non-interactive --no-wait --json > build.json 2> eas.log; then
-            tail -30 eas.log | while IFS= read -r l; do echo "::error::$l"; done
+            cat eas.log build.json 2>/dev/null | grep -v '^\s*$' | tail -40 | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           fi
           node -e "
