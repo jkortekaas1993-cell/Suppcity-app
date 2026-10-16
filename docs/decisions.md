@@ -54,3 +54,7 @@ Short ADRs. Add a new one at the bottom; do not rewrite old ones (mark them "Sup
 ## ADR-13: No Shopify product description in the app
 - **Decision:** The product screen does not render the Shopify `description` (free text). It shows only product name, variant, price, contents (variant options such as "Inhoud"), approved claims via `approvedClaimsFor()` / `getApprovedClaim()`, and a quiet link "Volledige productinformatie op suppcity.nl" that opens the external browser (`productPageUrl`, https + suppcity.nl only). Collection descriptions are shown as written by the shop owner for categories, not products.
 - **Why:** Compliance review C1. Webshop copy is written for the site and can contain health claims that are not in `src/content/claims.ts`; showing it in the app would break hard rule 4 (only fixed, approved claim sentences). Filtering free text reliably is not possible, so the app does not show it at all. Full legal product information (ingredients, warnings) stays on one place: suppcity.nl.
+
+## ADR-14: Points redemption tiers approved by the owner
+- **Decision:** The redemption tiers in `0003_accounts_points.sql` are approved by the shop owner (2026-10-16): 500 points = €5 (min. order €25), 1000 points = €12,50 (min. order €40), 2000 points = €30 (min. order €60).
+- **Why:** Owner sign-off on the proposal from sprint 1. Later changes go via a new tier row and deactivating the old one, never by editing history.
