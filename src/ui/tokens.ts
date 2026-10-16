@@ -60,6 +60,8 @@ export interface ThemeColors {
   errorMuted: string;
   /** Translucent bar background (tab bar). */
   barBg: string;
+  /** Dimmed backdrop behind sheets and dialogs. */
+  scrim: string;
   /** Categorical data series, in order. Series 0 is always the accent. */
   data: readonly [string, string, string, string, string];
 
@@ -121,6 +123,7 @@ const dark: CoreColors = {
   error: '#FF6166',
   errorMuted: '#3A1517',
   barBg: 'rgba(8,9,10,0.94)',
+  scrim: 'rgba(0,0,0,0.6)',
   data: [ACCENT, '#A594FF', '#F2B33D', '#FF7F6E', '#4EA8F5'],
 };
 
@@ -151,6 +154,7 @@ const light: CoreColors = {
   error: '#D93A40',
   errorMuted: '#FBE3E4',
   barBg: 'rgba(244,245,244,0.94)',
+  scrim: 'rgba(11,13,14,0.4)',
   data: [ACCENT, '#6E5BD9', '#C98A12', '#E0563F', '#2D7FD0'],
 };
 

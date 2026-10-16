@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Switch, View } from 'react-native';
 
 import { useRepositories } from '@/lib/db';
-import { Button, Card, EmptyState, ListRow, ProgressBar, SectionLabel, Screen, Text, useTheme } from '@/ui';
+import { Button, Card, EmptyState, ListRow, ProgressBar, SectionLabel, Screen, Text, useActionSheet, useTheme } from '@/ui';
 
 import { IntakeCheck } from '../components/IntakeCheck';
 import { WeekStrip } from '../components/WeekStrip';
@@ -29,6 +29,7 @@ export function SupplementsScreen() {
   const repo = useSupplementRepository();
   const repos = useRepositories();
   const version = useSupplementsVersion();
+  const sheet = useActionSheet();
   const [data, setData] = useState<Loaded | null>(null);
   const [today, setToday] = useState(() => localIsoDate(new Date()));
   const week = useMemo(() => weekOf(today), [today]);
@@ -74,14 +75,17 @@ export function SupplementsScreen() {
   }
 
   function rowActions(row: TodayRow) {
-    const name = row.supplement.name;
-    Alert.alert(name, row.supplement.dose_text || undefined, [
-      { text: 'Ingenomen', onPress: () => void mark(row, 'taken') },
-      { text: 'Overgeslagen', onPress: () => void mark(row, 'skipped') },
-      ...(row.intake ? [{ text: 'Markering wissen', onPress: () => void mark(row, null) }] : []),
-      { text: 'Bewerken', onPress: () => router.push({ pathname: '/supplements/edit', params: { id: row.supplement.id } }) },
-      { text: 'Annuleren', style: 'cancel' as const },
-    ]);
+    // Bottom sheet, not Alert.alert: Android drops alert buttons beyond three.
+    sheet.show({
+      title: row.supplement.name,
+      message: row.supplement.dose_text || undefined,
+      options: [
+        { label: 'Ingenomen', icon: 'check', onPress: () => void mark(row, 'taken') },
+        { label: 'Overgeslagen', icon: 'chevron-right', onPress: () => void mark(row, 'skipped') },
+        ...(row.intake ? [{ label: 'Markering wissen', icon: 'close' as const, onPress: () => void mark(row, null) }] : []),
+        { label: 'Bewerken', icon: 'settings', onPress: () => router.push({ pathname: '/supplements/edit', params: { id: row.supplement.id } }) },
+      ],
+    });
   }
 
   async function toggleReminders(on: boolean) {
@@ -234,6 +238,7 @@ export function SupplementsScreen() {
       <Text variant="caption" tone="tertiary">
         {DISCLAIMER}
       </Text>
+      {sheet.element}
     </Screen>
   );
 }

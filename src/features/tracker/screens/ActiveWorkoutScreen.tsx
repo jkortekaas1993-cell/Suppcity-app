@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRepositories, type Exercise } from '@/lib/db';
 import type { SetType } from '@/lib/db/types';
-import { Button, Card, Chip, EmptyState, haptics, Icon, IconButton, LiveDot, Ring, Text, useTheme } from '@/ui';
+import { Button, Card, Chip, EmptyState, haptics, Icon, IconButton, LiveDot, Ring, Text, useActionSheet, useTheme } from '@/ui';
 
 import { useActiveWorkout, useActiveWorkoutActions } from '../activeWorkoutStore';
 import { EQUIPMENT_LABELS_NL, MUSCLE_LABELS_NL } from '../components/labels';
@@ -231,6 +231,7 @@ function ExerciseCard({
   const router = useRouter();
   const { colors, space } = useTheme();
   const [showRest, setShowRest] = useState(false);
+  const sheet = useActionSheet();
   const doneCount = exercise.sets.filter((s) => s.completedAt !== null).length;
   const firstPrev = exercise.previous[0];
 
@@ -258,21 +259,25 @@ function ExerciseCard({
     );
   }
 
+  // Bottom sheet, not Alert.alert: Android drops alert buttons beyond three.
   const more = () =>
-    Alert.alert(exercise.name, undefined, [
-      { text: showRest ? 'Rusttijd verbergen' : 'Rusttijd instellen', onPress: () => setShowRest((v) => !v) },
-      { text: 'Oefening bekijken', onPress: () => router.push(`/exercise/${encodeURIComponent(exercise.exerciseId)}`) },
-      {
-        text: 'Oefening verwijderen',
-        style: 'destructive',
-        onPress: () =>
-          Alert.alert('Oefening verwijderen?', `${exercise.name} en de sets hiervan worden uit deze training gehaald.`, [
-            { text: 'Annuleren', style: 'cancel' },
-            { text: 'Verwijderen', style: 'destructive', onPress: () => actions.removeExercise(exercise.exerciseId) },
-          ]),
-      },
-      { text: 'Annuleren', style: 'cancel' },
-    ]);
+    sheet.show({
+      title: exercise.name,
+      options: [
+        { label: showRest ? 'Rusttijd verbergen' : 'Rusttijd instellen', icon: 'timer', onPress: () => setShowRest((v) => !v) },
+        { label: 'Oefening bekijken', icon: 'info', onPress: () => router.push(`/exercise/${encodeURIComponent(exercise.exerciseId)}`) },
+        {
+          label: 'Oefening verwijderen',
+          icon: 'trash',
+          destructive: true,
+          onPress: () =>
+            Alert.alert('Oefening verwijderen?', `${exercise.name} en de sets hiervan worden uit deze training gehaald.`, [
+              { text: 'Annuleren', style: 'cancel' },
+              { text: 'Verwijderen', style: 'destructive', onPress: () => actions.removeExercise(exercise.exerciseId) },
+            ]),
+        },
+      ],
+    });
 
   return (
     <Card padding={0} gap={0}>
@@ -317,6 +322,7 @@ function ExerciseCard({
       <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
         <Button label="+ Set toevoegen" variant="link" fullWidth onPress={() => actions.addSet(exercise.exerciseId)} />
       </View>
+      {sheet.element}
     </Card>
   );
 }

@@ -26,6 +26,13 @@ export { Icon, ICON_NAMES, type IconName, type IconProps } from './icons';
 export { TabIcon, type TabIconName } from './TabIcon';
 
 // Components
+export {
+  ActionSheet,
+  useActionSheet,
+  type ActionSheetConfig,
+  type ActionSheetOption,
+  type ActionSheetProps,
+} from './ActionSheet';
 export { Avatar, EmptyState, type AvatarProps, type EmptyStateProps } from './EmptyState';
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from './Button';
 export { Card, type CardProps, type CardVariant } from './Card';
