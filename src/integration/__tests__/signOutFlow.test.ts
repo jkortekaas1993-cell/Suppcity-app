@@ -1,4 +1,4 @@
-import { finalSyncThenWipe, wipeAllLocalData, type SignOutDeps } from '../signOutFlow';
+import { finalSyncThenWipe, signOutLocalData, wipeAllLocalData, type SignOutDeps } from '../signOutFlow';
 
 function deps(opts: { session?: boolean; syncOk?: boolean; hang?: boolean } = {}) {
   const calls: string[] = [];
@@ -64,5 +64,29 @@ describe('wipeAllLocalData: tracker and local supplements together', () => {
     }).catch((e: unknown) => e);
     expect((err as Error).message).toBe('boom');
     expect(calls).toEqual(['tracker']);
+  });
+});
+
+describe('signOutLocalData (ADR-15): supplements stay on the device', () => {
+  it('wipes tracker data keeping the supplement settings, then switches supplement reminders', async () => {
+    const calls: string[] = [];
+    await signOutLocalData({
+      wipeTracker: async (opts) => void calls.push(`tracker keep=${opts.keepAppStatePrefixes.join(',')}`),
+      keepAppStatePrefixes: ['supplements.'],
+      releaseSupplements: async () => void calls.push('supplements→signed out'),
+    });
+    expect(calls).toEqual(['tracker keep=supplements.', 'supplements→signed out']);
+  });
+
+  it('a failing reminder switch does not block the sign-out', async () => {
+    await expect(
+      signOutLocalData({
+        wipeTracker: async () => undefined,
+        keepAppStatePrefixes: [],
+        releaseSupplements: async () => {
+          throw new Error('notifications down');
+        },
+      }),
+    ).resolves.toBeUndefined();
   });
 });

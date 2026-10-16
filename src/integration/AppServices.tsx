@@ -2,7 +2,14 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 
 import { registerAccountServices } from '@/features/account';
 import { createPointsService } from '@/features/points';
-import { initSupplementReminders, wipeSupplementsLocal } from '@/features/supplements';
+import {
+  claimSupplementsForUser,
+  initSupplementReminders,
+  setSupplementOwnerResolver,
+  SUPPLEMENT_SETTING_PREFIX,
+  switchSupplementsOwner,
+  wipeSupplementsLocal,
+} from '@/features/supplements';
 import { ActiveWorkoutProvider } from '@/features/tracker';
 import { useRepositories, type Repositories } from '@/lib/db';
 import { CustomSyncEngine, createSupabaseSyncAdapter, type CursorStore, type RemoteSyncAdapter, type SyncEngine } from '@/lib/db/sync';
@@ -19,7 +26,7 @@ import {
   signInWithShopifyToken,
 } from '@/lib/supabase';
 
-import { finalSyncThenWipe, wipeAllLocalData } from './signOutFlow';
+import { finalSyncThenWipe, signOutLocalData, wipeAllLocalData } from './signOutFlow';
 import { queueWorkoutForPoints, syncThenClaim, type WorkoutPointsDeps } from './workoutPoints';
 
 /**
@@ -29,8 +36,9 @@ import { queueWorkoutForPoints, syncThenClaim, type WorkoutPointsDeps } from './
  *    login / account-deletion lifecycle;
  *  - sync: CustomSyncEngine over the tracker's SQLite SyncSource and Supabase;
  *  - points: a finished workout is synced first, then `award_workout_points`;
- *  - supplements (local only): reminders start after the migrations, and the local
- *    supplement data is wiped together with the tracker data.
+ *  - supplements (local only, owner-scoped, ADR-15): reminders start after the migrations;
+ *    sign-in claims anonymous rows, sign-out KEEPS them (hidden for the next person) and
+ *    only account deletion wipes them together with the tracker data.
  */
 
 const PENDING_POINTS_KEY = 'points.pendingWorkouts';
@@ -59,7 +67,15 @@ async function safeUserId(): Promise<string | null> {
 }
 
 export function createAppServices(repos: Repositories): { engine: SyncEngine; points: WorkoutPointsDeps } {
-  const wipeLocal = () => wipeAllLocalData({ wipeTracker: () => repos.wipeLocalData(), wipeSupplements: () => wipeSupplementsLocal() });
+  // Supplement rows are visible for the signed-in user (or signed-out rows only).
+  setSupplementOwnerResolver(safeUserId);
+  const wipeEverything = () => wipeAllLocalData({ wipeTracker: () => repos.wipeLocalData(), wipeSupplements: () => wipeSupplementsLocal() });
+  const wipeForSignOut = () =>
+    signOutLocalData({
+      wipeTracker: (opts) => repos.wipeLocalData(opts),
+      keepAppStatePrefixes: [SUPPLEMENT_SETTING_PREFIX],
+      releaseSupplements: () => switchSupplementsOwner(null),
+    });
   const engine = new CustomSyncEngine({
     local: repos.sync,
     remote: lazyRemote(),
@@ -92,19 +108,21 @@ export function createAppServices(repos: Repositories): { engine: SyncEngine; po
         // Attach rows made while signed out to this account, then push/pull and
         // claim points for workouts finished before login (server decides eligibility).
         await repos.sync.claimAnonymousRows(userId);
+        await claimSupplementsForUser(userId).catch(() => undefined);
+        await switchSupplementsOwner(userId).catch(() => undefined);
         await syncThenClaim(points);
       },
       async onAccountDeleted() {
-        await wipeLocal(); // tracker + supplements; also drops sync cursors and pending point claims
+        await wipeEverything(); // tracker + supplements; also drops sync cursors and pending point claims
       },
       async onSigningOut({ force }) {
-        // Last push while the Supabase session still exists, then the same wipe as
-        // account deletion: rows stamped with this user_id must not stay on the device.
+        // Last push while the Supabase session still exists, then wipe the tracker rows
+        // (they are in the account). Local-only supplements stay, hidden by owner (ADR-15).
         const res = await finalSyncThenWipe(
           {
             hasBackendSession: async () => (await safeUserId()) !== null,
             syncNow: () => engine.syncNow(),
-            wipeLocalData: wipeLocal,
+            wipeLocalData: wipeForSignOut,
           },
           { force },
         );
@@ -129,10 +147,16 @@ export function AppServices({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cleanup: (() => void) | null = null;
     let active = true;
-    void initSupplementReminders().then((c) => {
-      if (active) cleanup = c;
-      else c();
-    });
+    // Rows made before owner scoping (or while the claim at sign-in failed) belong to the
+    // account that is signed in now; then plan its reminders.
+    void safeUserId()
+      .then((uid) => (uid ? claimSupplementsForUser(uid) : undefined))
+      .catch(() => undefined)
+      .then(() => initSupplementReminders())
+      .then((c) => {
+        if (active) cleanup = c;
+        else c();
+      });
     return () => {
       active = false;
       cleanup?.();

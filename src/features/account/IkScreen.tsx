@@ -36,6 +36,14 @@ export interface IkScreenProps {
 }
 
 /** Ik tab (mockup Mijlpalen.dc.html): profile header, points, milestones, list rows, account deletion. */
+/**
+ * Sign-out copy (ADR-15): trainingen are in the account and leave the device; the
+ * supplement schedule is local only and stays, hidden until this account signs in again.
+ */
+export const SIGN_OUT_MESSAGE =
+  'Je trainingen worden eerst opgeslagen in je account en daarna van dit toestel gewist. ' +
+  'Je supplementenschema blijft alleen op dit toestel bewaard en is weer te zien als je opnieuw inlogt.';
+
 export function IkScreen({
   pointsSlot,
   badgesSlot,
@@ -80,7 +88,7 @@ export function IkScreen({
   }
 
   function confirmSignOut() {
-    Alert.alert('Uitloggen?', 'Je trainingen worden eerst opgeslagen in je account en daarna van dit toestel gewist.', [
+    Alert.alert('Uitloggen?', SIGN_OUT_MESSAGE, [
       { text: 'Annuleren', style: 'cancel' },
       { text: 'Uitloggen', style: 'destructive', onPress: () => void onSignOut() },
     ]);

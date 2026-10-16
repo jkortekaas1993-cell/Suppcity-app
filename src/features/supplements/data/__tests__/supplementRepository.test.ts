@@ -13,9 +13,20 @@ async function setup() {
   const version = await migrate(db, migrations);
   let n = 0;
   let t = Date.parse('2026-10-16T08:00:00.000Z');
-  const repo = createSupplementRepository(db, { newId: () => `id-${++n}`, now: () => new Date(t).toISOString() });
-  return { db, repo, version, tick: (ms = 1000) => void (t += ms) };
+  let who: string | null = null;
+  const deps = { newId: () => `id-${++n}`, now: () => new Date(t).toISOString(), owner: () => Promise.resolve(who) };
+  const repo = createSupplementRepository(db, deps);
+  return { db, repo, version, tick: (ms = 1000) => void (t += ms), signIn: (uid: string | null) => void (who = uid) };
 }
+
+const creatine = {
+  name: 'Creatine',
+  dose_text: '5 g',
+  shopify_variant_gid: null,
+  units_per_pack: 100,
+  units_left: 100,
+  schedules: [{ mode: 'fixed' as const, days_mask: 0b1111111, time_local: '08:00' }],
+};
 
 describe('migration 4', () => {
   it('is version 4, local only and not a tracker (synced) table', () => {
@@ -118,5 +129,68 @@ maybe('supplement repository (node:sqlite)', () => {
     // Other features' app_state is untouched.
     expect(await db.getFirstAsync("SELECT key FROM app_state WHERE key = 'notifications.prefs'", [])).toEqual({ key: 'notifications.prefs' });
     for (const t of SUPPLEMENT_TABLES) expect(await db.getFirstAsync(`SELECT COUNT(*) AS n FROM ${t}`, [])).toEqual({ n: 0 });
+  });
+
+  it('owner scoping (ADR-15): sign-out keeps rows but hides them; claim at sign-in; per-owner settings', async () => {
+    const { repo, db, signIn } = await setup();
+    // Signed out: an anonymous supplement.
+    const anon = await repo.save({ ...creatine, name: 'Anon' });
+    expect(anon.user_id).toBeNull();
+    await repo.setSetting('supplements.trainingDays', 0b101);
+
+    // Sign-in as A claims it, settings move with it.
+    await repo.claimAnonymous('A');
+    signIn('A');
+    const a = await repo.save({ ...creatine, name: 'Van A' });
+    expect(a.user_id).toBe('A');
+    expect(a.schedules[0]?.user_id).toBe('A');
+    await repo.setIntake({ supplementId: a.id, scheduleId: a.schedules[0]!.id, scheduledFor: '2026-10-16T08:00', status: 'taken' });
+    expect((await repo.list()).map((x) => x.name)).toEqual(['Anon', 'Van A']);
+    expect(await repo.getSetting('supplements.trainingDays')).toBe(0b101);
+    await repo.setSetting('supplements.notificationNames', true);
+
+    // Sign-out: nothing deleted, nothing visible for the next person.
+    signIn(null);
+    expect(await repo.list()).toEqual([]);
+    expect(await repo.get(a.id)).toBeNull();
+    expect(await repo.intakesBetween('2026-10-16T00:00', '2026-10-17T00:00')).toEqual([]);
+    expect(await repo.getSetting('supplements.trainingDays')).toBeNull();
+    expect(await repo.getSetting('supplements.notificationNames')).toBeNull();
+    expect((await repo.exportRows()).intakes).toEqual([]);
+    expect(await db.getFirstAsync('SELECT COUNT(*) AS n FROM supplements', [])).toEqual({ n: 2 });
+
+    // Another account B on the same phone: still invisible, cannot touch A's rows.
+    signIn('B');
+    expect(await repo.list()).toEqual([]);
+    await repo.softDelete(a.id);
+    await repo.setIntake({ supplementId: a.id, scheduleId: null, scheduledFor: '2026-10-17T08:00', status: 'taken' });
+    await expect(repo.save({ ...creatine, id: a.id, name: 'Kaping' })).rejects.toThrow();
+    await repo.applyTrainingDays(0b1);
+
+    // A signs in again: everything is back, unchanged.
+    signIn('A');
+    const back = await repo.list();
+    expect(back.map((x) => x.name)).toEqual(['Anon', 'Van A']);
+    expect(back.find((x) => x.id === a.id)?.units_left).toBe(99);
+    expect(await repo.intakesBetween('2026-10-16T00:00', '2026-10-18T00:00')).toHaveLength(1);
+    expect(await repo.getSetting('supplements.notificationNames')).toBe(true);
+
+    // Account deletion wipes every owner's supplement rows and settings.
+    await repo.wipe();
+    for (const t of SUPPLEMENT_TABLES) expect(await db.getFirstAsync(`SELECT COUNT(*) AS n FROM ${t}`, [])).toEqual({ n: 0 });
+    expect(await db.getFirstAsync("SELECT COUNT(*) AS n FROM app_state WHERE key LIKE 'supplements.%'", [])).toEqual({ n: 0 });
+  });
+
+  it('claim keeps an account setting that already exists', async () => {
+    const { repo, signIn } = await setup();
+    signIn('A');
+    await repo.setSetting('supplements.trainingDays', 0b1);
+    signIn(null);
+    await repo.setSetting('supplements.trainingDays', 0b11);
+    await repo.claimAnonymous('A');
+    signIn('A');
+    expect(await repo.getSetting('supplements.trainingDays')).toBe(0b1);
+    signIn(null);
+    expect(await repo.getSetting('supplements.trainingDays')).toBeNull();
   });
 });

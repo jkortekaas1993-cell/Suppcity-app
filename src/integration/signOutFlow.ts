@@ -35,10 +35,10 @@ export async function finalSyncThenWipe(deps: SignOutDeps, opts: { force?: boole
 }
 
 /**
- * Everything on this device that belongs to the signed-in person: the local-only supplement
- * schedule incl. its reminders, then tracker data and app_state (cursors, pending claims).
- * Sequential (two SQLite connections must not write at once); the tracker wipe still runs
- * when the supplement wipe fails, and the first error is rethrown.
+ * ACCOUNT DELETION: everything on this device that belongs to the person: the local-only
+ * supplement schedule incl. its reminders, then tracker data and app_state (cursors,
+ * pending claims). Sequential; the tracker wipe still runs when the supplement wipe
+ * fails, and the first error is rethrown.
  */
 export async function wipeAllLocalData(deps: { wipeTracker(): Promise<void>; wipeSupplements(): Promise<void> }): Promise<void> {
   let error: unknown = null;
@@ -65,4 +65,20 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
       },
     );
   });
+}
+
+/**
+ * SIGN-OUT (ADR-15): tracker data and app_state are wiped (they are in the account and
+ * come back with the next sync), EXCEPT the supplement settings: supplements are local
+ * only, so their rows and settings stay on the device, owner-scoped (user_id), and are
+ * invisible until the same account signs in again. Afterwards the supplement reminders
+ * switch to the signed-out owner. A failing reminder switch never blocks the sign-out.
+ */
+export async function signOutLocalData(deps: {
+  wipeTracker(opts: { keepAppStatePrefixes: readonly string[] }): Promise<void>;
+  keepAppStatePrefixes: readonly string[];
+  releaseSupplements(): Promise<void>;
+}): Promise<void> {
+  await deps.wipeTracker({ keepAppStatePrefixes: deps.keepAppStatePrefixes });
+  await deps.releaseSupplements().catch(() => undefined);
 }

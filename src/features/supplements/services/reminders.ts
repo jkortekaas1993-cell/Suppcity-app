@@ -199,7 +199,7 @@ let subscription: { remove(): void } | null = null;
  */
 export async function initSupplementReminders(db?: SqlDb): Promise<() => void> {
   try {
-    const repo = await sharedRepository(db);
+    const repo = await sharedRepository({ db });
     await ensureCategory();
     if (!subscription) {
       subscription = Notifications.addNotificationResponseReceivedListener((r) => {

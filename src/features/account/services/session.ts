@@ -61,7 +61,8 @@ export type SignOutOutcome = { status: 'signed_out' } | { status: 'unsynced' };
 
 /**
  * Sign out (review H1): first a last sync, then wipe this account's local data
- * (trainingen, app_state incl. sync cursors, voorraadteller, winkelwagen), then end
+ * (trainingen, app_state incl. sync cursors, voorraadteller, winkelwagen; the local-only
+ * supplement schedule stays on the device, hidden by owner, ADR-15), then end
  * the Shopify and Supabase sessions. If the last sync fails, nothing happens and the
  * UI asks whether to sign out anyway (`force`), which loses unsynced trainingen.
  */

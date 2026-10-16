@@ -18,11 +18,22 @@ import type {
  * Health data (hard rule 1): nothing here is synced or sent anywhere. The tables are
  * not in TRACKER_TABLES, so the sync engine never sees them. Rows keep the usual
  * client UUID + timestamps + soft delete so they can sync later if that is ever decided.
+ *
+ * Ownership (ADR-15): because these rows exist only on this device, signing out does NOT
+ * delete them. Every row carries `user_id` (the signed-in user, or NULL when made while
+ * signed out) and every query only sees rows of the current owner or without owner, so a
+ * next person on the same phone never sees them. Anonymous rows are claimed at sign-in;
+ * only account deletion wipes the tables.
  */
+
+/** The current owner: the signed-in Supabase user id, or null when signed out. */
+export type SupplementOwner = () => Promise<string | null>;
 
 export interface SupplementRepoDeps {
   newId: () => string;
   now: () => string;
+  /** Defaults to the anonymous (signed-out) owner. */
+  owner?: SupplementOwner;
 }
 
 export interface SupplementRepository {
@@ -40,15 +51,38 @@ export interface SupplementRepository {
   /** Undo: removes the mark and gives the unit back when it was taken. */
   clearIntake(supplementId: string, scheduledFor: string): Promise<void>;
   exportRows(): Promise<{ supplements: SupplementExportRow[]; intakes: IntakeExportRow[] }>;
+  /** Settings of the current owner (stored per owner in app_state). */
   getSetting<T>(key: SupplementSettingKey): Promise<T | null>;
   setSetting(key: SupplementSettingKey, value: unknown): Promise<void>;
-  /** Hard-deletes all supplement rows and settings (logout / account deletion). */
+  /** Sign-in: rows and settings made while signed out become this user's. */
+  claimAnonymous(userId: string): Promise<void>;
+  /** Hard-deletes ALL supplement rows and settings on this device (account deletion only). */
   wipe(): Promise<void>;
 }
 
 /** Our keys in the local-only app_state table. */
-export type SupplementSettingKey = 'supplements.reminders' | 'supplements.trainingDays' | 'supplements.lastPlan';
-const SETTING_PREFIX = 'supplements.';
+export type SupplementSettingKey =
+  | 'supplements.reminders'
+  | 'supplements.trainingDays'
+  | 'supplements.lastPlan'
+  | 'supplements.notificationNames';
+export const SUPPLEMENT_SETTING_KEYS: readonly SupplementSettingKey[] = [
+  'supplements.reminders',
+  'supplements.trainingDays',
+  'supplements.lastPlan',
+  'supplements.notificationNames',
+];
+/** Every supplement setting key starts with this (also the per-owner variants). */
+export const SUPPLEMENT_SETTING_PREFIX = 'supplements.';
+
+/** app_state key for an owner: the plain key when signed out, `key@<userId>` when signed in. */
+export function ownerSettingKey(key: SupplementSettingKey, owner: string | null): string {
+  return owner ? `${key}@${owner}` : key;
+}
+
+/** SQL: rows of the current owner (bound as the next parameter) or without owner. */
+const VISIBLE = '(user_id IS NULL OR user_id = ?)';
+const VISIBLE_SUPPLEMENT_IDS = `SELECT id FROM supplements WHERE ${VISIBLE}`;
 
 type SupplementRow = Supplement;
 interface ScheduleRow extends Omit<SupplementSchedule, 'mode'> {
@@ -60,6 +94,8 @@ const asMode = (m: string): ScheduleMode => (MODES.includes(m as ScheduleMode) ?
 const toSchedule = (r: ScheduleRow): SupplementSchedule => ({ ...r, mode: asMode(r.mode) });
 
 export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps): SupplementRepository {
+  const owner = (): Promise<string | null> => (deps.owner ? deps.owner() : Promise.resolve(null));
+
   async function schedulesFor(ids: string[]): Promise<Map<string, SupplementSchedule[]>> {
     const out = new Map<string, SupplementSchedule[]>();
     if (ids.length === 0) return out;
@@ -78,15 +114,18 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
 
   async function list(): Promise<SupplementWithSchedules[]> {
     const rows = await db.getAllAsync<SupplementRow>(
-      'SELECT * FROM supplements WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE, created_at',
-      [],
+      `SELECT * FROM supplements WHERE deleted_at IS NULL AND ${VISIBLE} ORDER BY name COLLATE NOCASE, created_at`,
+      [await owner()],
     );
     const sch = await schedulesFor(rows.map((r) => r.id));
     return rows.map((r) => ({ ...r, schedules: sch.get(r.id) ?? [] }));
   }
 
   async function get(id: string): Promise<SupplementWithSchedules | null> {
-    const row = await db.getFirstAsync<SupplementRow>('SELECT * FROM supplements WHERE id = ? AND deleted_at IS NULL', [id]);
+    const row = await db.getFirstAsync<SupplementRow>(
+      `SELECT * FROM supplements WHERE id = ? AND deleted_at IS NULL AND ${VISIBLE}`,
+      [id, await owner()],
+    );
     if (!row) return null;
     const sch = await schedulesFor([id]);
     return { ...row, schedules: sch.get(id) ?? [] };
@@ -95,10 +134,15 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
   async function save(input: SupplementInput): Promise<SupplementWithSchedules> {
     const now = deps.now();
     const id = input.id ?? deps.newId();
-    await db.withTransactionAsync(async () => {
+    const uid = await owner();
+    await db.withExclusiveTransactionAsync(async (tx) => {
       const existing = input.id
-        ? await db.getFirstAsync<{ id: string }>('SELECT id FROM supplements WHERE id = ?', [input.id])
+        ? await tx.getFirstAsync<{ id: string }>(`SELECT id FROM supplements WHERE id = ? AND ${VISIBLE}`, [input.id, uid])
         : null;
+      if (input.id && !existing) {
+        const taken = await tx.getFirstAsync<{ id: string }>('SELECT id FROM supplements WHERE id = ?', [input.id]);
+        if (taken) throw new Error('Supplement belongs to another account');
+      }
       const values: SqlValue[] = [
         input.name.trim(),
         input.shopify_variant_gid,
@@ -108,27 +152,27 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
         now,
       ];
       if (existing) {
-        await db.runAsync(
+        await tx.runAsync(
           `UPDATE supplements SET name = ?, shopify_variant_gid = ?, dose_text = ?, units_per_pack = ?, units_left = ?,
              updated_at = ?, deleted_at = NULL WHERE id = ?`,
           [...values, id],
         );
-        await db.runAsync(
+        await tx.runAsync(
           'UPDATE supplement_schedules SET deleted_at = ?, updated_at = ? WHERE supplement_id = ? AND deleted_at IS NULL',
           [now, now, id],
         );
       } else {
-        await db.runAsync(
-          `INSERT INTO supplements (id, name, shopify_variant_gid, dose_text, units_per_pack, units_left, updated_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [id, ...values, now],
+        await tx.runAsync(
+          `INSERT INTO supplements (id, name, shopify_variant_gid, dose_text, units_per_pack, units_left, updated_at, created_at, user_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, ...values, now, uid],
         );
       }
       for (const s of input.schedules) {
-        await db.runAsync(
-          `INSERT INTO supplement_schedules (id, supplement_id, days_mask, mode, time_local, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [deps.newId(), id, s.days_mask, s.mode, s.time_local, now, now],
+        await tx.runAsync(
+          `INSERT INTO supplement_schedules (id, user_id, supplement_id, days_mask, mode, time_local, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [deps.newId(), uid, id, s.days_mask, s.mode, s.time_local, now, now],
         );
       }
     });
@@ -139,9 +183,10 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
 
   async function softDelete(id: string): Promise<void> {
     const now = deps.now();
-    await db.withTransactionAsync(async () => {
-      await db.runAsync('UPDATE supplements SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', [now, now, id]);
-      await db.runAsync(
+    if (!(await get(id))) return;
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync('UPDATE supplements SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL', [now, now, id]);
+      await tx.runAsync(
         'UPDATE supplement_schedules SET deleted_at = ?, updated_at = ? WHERE supplement_id = ? AND deleted_at IS NULL',
         [now, now, id],
       );
@@ -150,12 +195,13 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
 
   async function applyTrainingDays(trainingDaysMask: number): Promise<void> {
     const now = deps.now();
-    await db.withTransactionAsync(async () => {
+    const uid = await owner();
+    await db.withExclusiveTransactionAsync(async (tx) => {
       for (const mode of ['training', 'rest'] as const) {
-        await db.runAsync(
+        await tx.runAsync(
           `UPDATE supplement_schedules SET days_mask = ?, updated_at = ?
-           WHERE deleted_at IS NULL AND mode = ? AND days_mask <> ?`,
-          [effectiveMask(mode, 0, trainingDaysMask), now, mode, effectiveMask(mode, 0, trainingDaysMask)],
+           WHERE deleted_at IS NULL AND mode = ? AND days_mask <> ? AND supplement_id IN (${VISIBLE_SUPPLEMENT_IDS})`,
+          [effectiveMask(mode, 0, trainingDaysMask), now, mode, effectiveMask(mode, 0, trainingDaysMask), uid],
         );
       }
     });
@@ -164,22 +210,23 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
   async function intakesBetween(from: string, to: string): Promise<SupplementIntake[]> {
     return db.getAllAsync<SupplementIntake>(
       `SELECT * FROM supplement_intakes WHERE deleted_at IS NULL AND scheduled_for >= ? AND scheduled_for < ?
+         AND supplement_id IN (${VISIBLE_SUPPLEMENT_IDS})
        ORDER BY scheduled_for`,
-      [from, to],
+      [from, to, await owner()],
     );
   }
 
-  async function adjustUnits(supplementId: string, wasTaken: boolean, isTaken: boolean, now: string) {
-    const s = await db.getFirstAsync<{ units_left: number | null }>('SELECT units_left FROM supplements WHERE id = ?', [supplementId]);
+  async function adjustUnits(q: SqlDb, supplementId: string, wasTaken: boolean, isTaken: boolean, now: string) {
+    const s = await q.getFirstAsync<{ units_left: number | null }>('SELECT units_left FROM supplements WHERE id = ?', [supplementId]);
     if (!s) return;
     const next = applyIntakeDelta(s.units_left, wasTaken, isTaken);
     if (next !== s.units_left) {
-      await db.runAsync('UPDATE supplements SET units_left = ?, updated_at = ? WHERE id = ?', [next, now, supplementId]);
+      await q.runAsync('UPDATE supplements SET units_left = ?, updated_at = ? WHERE id = ?', [next, now, supplementId]);
     }
   }
 
-  async function currentStatus(supplementId: string, scheduledFor: string): Promise<IntakeStatus | null> {
-    const row = await db.getFirstAsync<{ status: IntakeStatus }>(
+  async function currentStatus(q: SqlDb, supplementId: string, scheduledFor: string): Promise<IntakeStatus | null> {
+    const row = await q.getFirstAsync<{ status: IntakeStatus }>(
       'SELECT status FROM supplement_intakes WHERE supplement_id = ? AND scheduled_for = ? AND deleted_at IS NULL',
       [supplementId, scheduledFor],
     );
@@ -188,16 +235,19 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
 
   async function setIntake(input: { supplementId: string; scheduleId: string | null; scheduledFor: string; status: IntakeStatus }) {
     const now = deps.now();
-    await db.withTransactionAsync(async () => {
-      const before = await currentStatus(input.supplementId, input.scheduledFor);
-      await db.runAsync(
-        `INSERT INTO supplement_intakes (id, supplement_id, schedule_id, scheduled_for, status, taken_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    const supplement = await get(input.supplementId);
+    if (!supplement) return; // not this owner's (e.g. a stale notification action)
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      const before = await currentStatus(tx, input.supplementId, input.scheduledFor);
+      await tx.runAsync(
+        `INSERT INTO supplement_intakes (id, user_id, supplement_id, schedule_id, scheduled_for, status, taken_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(supplement_id, scheduled_for) DO UPDATE SET
            schedule_id = excluded.schedule_id, status = excluded.status, taken_at = excluded.taken_at,
            updated_at = excluded.updated_at, deleted_at = NULL`,
         [
           deps.newId(),
+          supplement.user_id,
           input.supplementId,
           input.scheduleId,
           input.scheduledFor,
@@ -207,21 +257,22 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
           now,
         ],
       );
-      await adjustUnits(input.supplementId, before === 'taken', input.status === 'taken', now);
+      await adjustUnits(tx, input.supplementId, before === 'taken', input.status === 'taken', now);
     });
   }
 
   async function clearIntake(supplementId: string, scheduledFor: string) {
     const now = deps.now();
-    await db.withTransactionAsync(async () => {
-      const before = await currentStatus(supplementId, scheduledFor);
+    if (!(await get(supplementId))) return;
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      const before = await currentStatus(tx, supplementId, scheduledFor);
       if (before === null) return;
-      await db.runAsync(
+      await tx.runAsync(
         `UPDATE supplement_intakes SET deleted_at = ?, updated_at = ?
          WHERE supplement_id = ? AND scheduled_for = ? AND deleted_at IS NULL`,
         [now, now, supplementId, scheduledFor],
       );
-      await adjustUnits(supplementId, before === 'taken', false, now);
+      await adjustUnits(tx, supplementId, before === 'taken', false, now);
     });
   }
 
@@ -243,14 +294,17 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
     const intakes = await db.getAllAsync<IntakeExportRow>(
       `SELECT i.id AS intake_id, i.supplement_id, s.name AS supplement_name, i.scheduled_for, i.status, i.taken_at, i.updated_at
        FROM supplement_intakes i JOIN supplements s ON s.id = i.supplement_id
-       WHERE i.deleted_at IS NULL ORDER BY i.scheduled_for, s.name`,
-      [],
+       WHERE i.deleted_at IS NULL AND s.deleted_at IS NULL AND (s.user_id IS NULL OR s.user_id = ?)
+       ORDER BY i.scheduled_for, s.name`,
+      [await owner()],
     );
     return { supplements, intakes };
   }
 
   async function getSetting<T>(key: SupplementSettingKey): Promise<T | null> {
-    const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM app_state WHERE key = ?', [key]);
+    const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM app_state WHERE key = ?', [
+      ownerSettingKey(key, await owner()),
+    ]);
     if (!row) return null;
     try {
       return JSON.parse(row.value) as T;
@@ -263,16 +317,34 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
     await db.runAsync(
       `INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      [key, JSON.stringify(value), deps.now()],
+      [ownerSettingKey(key, await owner()), JSON.stringify(value), deps.now()],
     );
   }
 
-  async function wipe(): Promise<void> {
-    await db.withTransactionAsync(async () => {
-      for (const t of ['supplement_intakes', 'supplement_schedules', 'supplements'] as const) {
-        await db.runAsync(`DELETE FROM ${t}`, []);
+  async function claimAnonymous(userId: string): Promise<void> {
+    const now = deps.now();
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      for (const t of ['supplements', 'supplement_schedules', 'supplement_intakes'] as const) {
+        await tx.runAsync(`UPDATE ${t} SET user_id = ?, updated_at = ? WHERE user_id IS NULL`, [userId, now]);
       }
-      await db.runAsync('DELETE FROM app_state WHERE key LIKE ?', [`${SETTING_PREFIX}%`]);
+      // Settings made while signed out move to the account, unless it already has its own.
+      for (const key of SUPPLEMENT_SETTING_KEYS) {
+        await tx.runAsync(
+          `INSERT INTO app_state (key, value, updated_at) SELECT ?, value, ? FROM app_state WHERE key = ?
+           ON CONFLICT(key) DO NOTHING`,
+          [ownerSettingKey(key, userId), now, key],
+        );
+        await tx.runAsync('DELETE FROM app_state WHERE key = ?', [key]);
+      }
+    });
+  }
+
+  async function wipe(): Promise<void> {
+    await db.withExclusiveTransactionAsync(async (tx) => {
+      for (const t of ['supplement_intakes', 'supplement_schedules', 'supplements'] as const) {
+        await tx.runAsync(`DELETE FROM ${t}`, []);
+      }
+      await tx.runAsync('DELETE FROM app_state WHERE key LIKE ?', [`${SUPPLEMENT_SETTING_PREFIX}%`]);
     });
   }
 
@@ -288,6 +360,7 @@ export function createSupplementRepository(db: SqlDb, deps: SupplementRepoDeps):
     exportRows,
     getSetting,
     setSetting,
+    claimAnonymous,
     wipe,
   };
 }

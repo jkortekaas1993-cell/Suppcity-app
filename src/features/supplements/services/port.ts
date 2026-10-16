@@ -2,7 +2,7 @@ import type { SqlDb } from '@/lib/db';
 
 import { INTAKES_CSV_FILE, intakesToCsv, SUPPLEMENTS_CSV_FILE, supplementsToCsv } from '../logic/csv';
 import { LOW_STOCK_DAYS, reorderSignals, type SupplementReorderSignal } from '../logic/stock';
-import { cancelAllSupplementReminders } from './reminders';
+import { cancelAllSupplementReminders, rescheduleSupplementReminders } from './reminders';
 import { notifySupplementsChanged, sharedRepository } from './store';
 
 export interface SupplementCsvFile {
@@ -15,7 +15,7 @@ export interface SupplementCsvFile {
  * intake log). The integrator hangs these next to the training CSV in the Data screen.
  */
 export async function exportSupplementsCsv(db?: SqlDb): Promise<SupplementCsvFile[]> {
-  const repo = await sharedRepository(db);
+  const repo = await sharedRepository({ db });
   const { supplements, intakes } = await repo.exportRows();
   return [
     { fileName: SUPPLEMENTS_CSV_FILE, csv: supplementsToCsv(supplements) },
@@ -23,11 +23,32 @@ export async function exportSupplementsCsv(db?: SqlDb): Promise<SupplementCsvFil
   ];
 }
 
-/** Logout / account deletion (hard rule 3): removes all local supplement data and reminders. */
+/**
+ * Account deletion ONLY (hard rule 3): removes all local supplement data and reminders.
+ * Signing out keeps the rows (they are local only and owner-scoped, ADR-15); see
+ * `switchSupplementsOwner`.
+ */
 export async function wipeSupplementsLocal(db?: SqlDb): Promise<void> {
   await cancelAllSupplementReminders();
-  const repo = await sharedRepository(db);
+  const repo = await sharedRepository({ db });
   await repo.wipe();
+  notifySupplementsChanged();
+}
+
+/** Sign-in: supplements and settings made while signed out become this account's. */
+export async function claimSupplementsForUser(userId: string, db?: SqlDb): Promise<void> {
+  const repo = await sharedRepository({ db, owner: userId });
+  await repo.claimAnonymous(userId);
+}
+
+/**
+ * The visible owner changes (sign-in: the user id; sign-out: null). The previous owner's
+ * reminders are cancelled and the new owner's are planned; screens reload. Rows stay.
+ */
+export async function switchSupplementsOwner(owner: string | null, db?: SqlDb): Promise<void> {
+  await cancelAllSupplementReminders();
+  const repo = await sharedRepository({ db, owner });
+  await rescheduleSupplementReminders(repo);
   notifySupplementsChanged();
 }
 
@@ -40,7 +61,7 @@ export async function getSupplementStockForReorder(
   opts: { db?: SqlDb; thresholdDays?: number } = {},
 ): Promise<SupplementReorderSignal[]> {
   try {
-    const repo = await sharedRepository(opts.db);
+    const repo = await sharedRepository({ db: opts.db });
     return reorderSignals(await repo.list(), opts.thresholdDays ?? LOW_STOCK_DAYS);
   } catch {
     return [];

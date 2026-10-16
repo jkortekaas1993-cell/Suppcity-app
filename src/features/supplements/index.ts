@@ -6,9 +6,13 @@ export { SupplementsScreen } from './screens/SupplementsScreen';
 export { SupplementEditScreen } from './screens/SupplementEditScreen';
 export { initSupplementReminders, rescheduleSupplementReminders } from './services/reminders';
 export {
+  claimSupplementsForUser,
   exportSupplementsCsv,
   getSupplementStockForReorder,
+  switchSupplementsOwner,
   wipeSupplementsLocal,
   type SupplementCsvFile,
 } from './services/port';
+export { setSupplementOwnerResolver } from './services/store';
+export { SUPPLEMENT_SETTING_PREFIX } from './data/supplementRepository';
 export type { SupplementReorderSignal } from './logic/stock';
