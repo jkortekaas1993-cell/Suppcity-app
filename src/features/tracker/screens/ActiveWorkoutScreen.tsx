@@ -1,11 +1,34 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 import { useRepositories, type Exercise } from '@/lib/db';
 import type { SetType } from '@/lib/db/types';
-import { Button, Card, Chip, EmptyState, haptics, Icon, IconButton, LiveDot, Ring, Text, useActionSheet, useTheme } from '@/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  haptics,
+  Icon,
+  IconButton,
+  LiveDot,
+  ProgressBar,
+  Ring,
+  Text,
+  useActionSheet,
+  useTheme,
+} from '@/ui';
 
 import { useActiveWorkout, useActiveWorkoutActions } from '../activeWorkoutStore';
 import { EQUIPMENT_LABELS_NL, MUSCLE_LABELS_NL } from '../components/labels';
@@ -17,8 +40,10 @@ import { formatRepRange } from '../logic/routines';
 import { workoutVolumeKg } from '../logic/summaryView';
 
 /**
- * Full-screen active workout (Workout.dc.html). Training only: no commercial elements here
- * (hard rule; see CLAUDE.md "Trainen ... 100% free of ads and the shop").
+ * Full-screen active workout (design round 3, Workout.dc.html). Training only: no commercial
+ * elements here (hard rule; see CLAUDE.md "Trainen ... 100% free of ads and the shop").
+ * Motion: the rest ring counts down live with a soft glow (tick haptic in the last 3 s); ticking
+ * a set draws the check and briefly lights the row. All of it is off with "reduce motion".
  */
 
 const REST_OPTIONS = [0, 60, 90, 120, 180, 240];
@@ -29,6 +54,14 @@ const SET_TYPE_NAMES: Record<SetType, string> = { normal: 'normaal', warmup: 'wa
 /** Column widths of the set grid (mockup: 36 · 1fr · 64 · 52 · 44). */
 const COL = { set: 36, kg: 64, reps: 52, check: 44 } as const;
 const ROW_PAD = 14;
+/** Rest ring on the hero card (mockup: 150 px, 10 px stroke). */
+const REST_RING = 150;
+/** Tick haptic on each of the last seconds of the rest timer. */
+const REST_TICK_SECONDS = 3;
+/** Length of the check path below (m5 12 5 5 9-10), rounded up, for the draw-in dash. */
+const CHECK_LENGTH = 22;
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
@@ -60,9 +93,43 @@ function previousText(prev: { weightKg: number | null; reps: number | null } | u
   return `${formatNumberNl(prev.weightKg ?? 0, 2)} × ${prev.reps ?? '–'}`;
 }
 
-/** 36pt check box; afgevinkt = accent fill with an SVG check. Hit area 48. */
+/** The check mark draws itself when a set is ticked (static on mount and with reduce motion). */
+function DrawnCheck({ color }: { color: string }) {
+  const reduceMotion = useReducedMotion();
+  const drawn = useSharedValue(reduceMotion ? 1 : 0);
+  useEffect(() => {
+    if (reduceMotion) {
+      drawn.set(1);
+      return;
+    }
+    drawn.set(withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }));
+  }, [reduceMotion, drawn]);
+  const props = useAnimatedProps(() => ({ strokeDashoffset: CHECK_LENGTH * (1 - drawn.get()) }));
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <AnimatedPath
+        d="m5 12 5 5 9-10"
+        fill="none"
+        stroke={color}
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray={`${CHECK_LENGTH} ${CHECK_LENGTH}`}
+        animatedProps={props}
+      />
+    </Svg>
+  );
+}
+
+/** 36pt check box; afgevinkt = accent fill with a self-drawing check. Hit area 48. */
 function CheckBox({ done, label, onPress }: { done: boolean; label: string; onPress: () => void }) {
   const { colors, radius } = useTheme();
+  // Only animate a tick made on this screen; sets that were already done show a plain check.
+  const wasDone = useRef(done);
+  const animate = done && !wasDone.current;
+  useEffect(() => {
+    if (!done) wasDone.current = false;
+  }, [done]);
   return (
     <Pressable
       accessibilityRole="checkbox"
@@ -81,15 +148,37 @@ function CheckBox({ done, label, onPress }: { done: boolean; label: string; onPr
         borderColor: colors.borderStrong,
       })}
     >
-      {done ? <Icon name="check" size={18} color={colors.onAccent} strokeWidth={3} /> : null}
+      {done ? (
+        animate ? (
+          <DrawnCheck color={colors.onAccent} />
+        ) : (
+          <Icon name="check" size={18} color={colors.onAccent} strokeWidth={3} />
+        )
+      ) : null}
     </Pressable>
   );
+}
+
+/** Brief accent flash over a set row when it is ticked off. Nothing with reduce motion. */
+function useRowFlash(done: boolean) {
+  const reduceMotion = useReducedMotion();
+  const flash = useSharedValue(0);
+  const prev = useRef(done);
+  useEffect(() => {
+    if (done && !prev.current && !reduceMotion) {
+      flash.set(0.28);
+      flash.set(withTiming(0, { duration: 650, easing: Easing.out(Easing.quad) }));
+    }
+    prev.current = done;
+  }, [done, reduceMotion, flash]);
+  return useAnimatedStyle(() => ({ opacity: flash.get() }));
 }
 
 function SetRow({ exercise, set, index }: { exercise: ActiveExercise; set: ActiveSet; index: number }) {
   const actions = useActiveWorkoutActions();
   const { colors, layout, space } = useTheme();
   const done = set.completedAt !== null;
+  const flashStyle = useRowFlash(done);
   const prev = exercise.previous[index];
   const workingNumber = exercise.sets.slice(0, index + 1).filter((s) => s.setType !== 'warmup').length;
   const label = SET_TYPE_SHORT[set.setType] || String(workingNumber);
@@ -115,6 +204,7 @@ function SetRow({ exercise, set, index }: { exercise: ActiveExercise; set: Activ
         borderTopColor: done ? colors.bg0 : colors.border,
       }}
     >
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.accent }, flashStyle]} />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${name}, type ${SET_TYPE_NAMES[set.setType]}`}
@@ -185,7 +275,7 @@ function SetRow({ exercise, set, index }: { exercise: ActiveExercise; set: Activ
           done={done}
           label={done ? `${name} niet meer afvinken` : `${name} afvinken`}
           onPress={() => {
-            haptics.medium();
+            haptics.light();
             actions.toggleSet(set.id);
           }}
         />
@@ -289,7 +379,9 @@ function ExerciseCard({
           onPress={onToggle}
           style={{ flex: 1, minHeight: 48, paddingTop: space.xs + 2, paddingBottom: space.sm + 2, gap: space.xxs }}
         >
-          <Text variant="heading">{exercise.name}</Text>
+          <Text variant="title" style={{ fontSize: 26, lineHeight: 28 }} numberOfLines={2}>
+            {exercise.name}
+          </Text>
           <Text variant="caption" tone="tertiary" tnum>
             {meta}
           </Text>
@@ -327,40 +419,133 @@ function ExerciseCard({
   );
 }
 
-function RestBar({ restEndsAt, total, now }: { restEndsAt: number; total: number; now: number }) {
+interface NextSet {
+  exerciseName: string;
+  label: string;
+  /** "Set 3 · 80 kg × 8" (falls back to "vorige keer" values when the set is still empty). */
+  text: string;
+  spoken: string;
+}
+
+/** The first open set of the workout: what comes after this rest. */
+function findNextSet(exercises: readonly ActiveExercise[]): NextSet | null {
+  for (const e of exercises) {
+    const index = e.sets.findIndex((s) => s.completedAt === null);
+    const set = e.sets[index];
+    if (index < 0 || !set) continue;
+    const prev = e.previous[index];
+    const working = e.sets.slice(0, index + 1).filter((s) => s.setType !== 'warmup').length;
+    const label = set.setType === 'warmup' ? 'Warming-up' : `Set ${working}`;
+    const kg = set.weightKg ?? prev?.weightKg ?? null;
+    const reps = set.reps ?? prev?.reps ?? null;
+    const load =
+      kg !== null && reps !== null
+        ? `${formatNumberNl(kg, 2)} kg × ${reps}`
+        : kg !== null
+          ? `${formatNumberNl(kg, 2)} kg`
+          : reps !== null
+            ? `${reps} reps`
+            : '';
+    const spokenLoad =
+      kg !== null || reps !== null
+        ? `, ${kg !== null ? `${formatNumberNl(kg, 2)} kilo` : ''}${kg !== null && reps !== null ? ', ' : ''}${reps !== null ? `${reps} herhalingen` : ''}`
+        : '';
+    return {
+      exerciseName: e.name,
+      label,
+      text: load ? `${label} · ${load}` : label,
+      spoken: `Hierna: ${e.name}, ${label.toLowerCase()}${spokenLoad}`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Rest timer as the hero card (mockup): a big glowing ring that counts down live, with the next
+ * set and −15 s / +15 s beside it. Ticks on each of the last three seconds.
+ */
+function RestHero({ restEndsAt, total, now, next }: { restEndsAt: number; total: number; now: number; next: NextSet | null }) {
   const actions = useActiveWorkoutActions();
-  const { colors, radius, space } = useTheme();
+  const { radius, space } = useTheme();
   const left = Math.max(0, restEndsAt - now);
   const progress = total > 0 ? left / (total * 1000) : 0;
+  const secondsLeft = Math.ceil(left / 1000);
+
+  // Tick haptic in the last seconds (the store adds a firm one when rest is over).
+  const lastTick = useRef<number | null>(null);
+  useEffect(() => {
+    if (secondsLeft > 0 && secondsLeft <= REST_TICK_SECONDS && lastTick.current !== secondsLeft) {
+      lastTick.current = secondsLeft;
+      haptics.selection();
+    }
+  }, [secondsLeft]);
+
   return (
-    <View
-      style={{
-        marginHorizontal: space.lg,
-        marginBottom: space.sm,
-        marginTop: space.xs,
-        paddingVertical: space.md + 2,
-        paddingHorizontal: space.lg,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.accentBorder,
-        backgroundColor: colors.bg1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.lg,
-      }}
-    >
-      <Ring progress={progress} size={64} accessibilityLabel={`Rusttimer, ${spokenDuration(left)} over`} />
-      <View style={{ flex: 1 }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Text variant="eyebrow" tone="accent">
-          Rust
-        </Text>
-        <Text variant="heading" tnum style={{ fontSize: 32, lineHeight: 36 }} maxFontSizeMultiplier={1.2}>
-          {formatCountdown(left)}
-        </Text>
+    <Card variant="hero" padding={18} style={{ borderRadius: radius.xxl }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg + 2 }}>
+        <Ring
+          progress={progress}
+          size={REST_RING}
+          strokeWidth={10}
+          glow
+          accessibilityLabel={`Rusttimer, ${spokenDuration(left)} over`}
+        >
+          <View style={{ alignItems: 'center' }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+            <Text variant="hero" style={{ fontSize: 44, lineHeight: 46 }} maxFontSizeMultiplier={1.1}>
+              {formatCountdown(left)}
+            </Text>
+            <Text variant="micro" tone="tertiary" style={{ fontSize: 12, letterSpacing: 1.2 }} maxFontSizeMultiplier={1.2}>
+              RUST
+            </Text>
+          </View>
+        </Ring>
+        <View style={{ flex: 1, gap: space.sm + 2 }}>
+          {next ? (
+            <View accessible accessibilityLabel={next.spoken} style={{ gap: space.xxs }}>
+              <Text variant="eyebrow" tone="accent">
+                Hierna
+              </Text>
+              <Text variant="heading" tnum style={{ fontSize: 16, lineHeight: 20 }}>
+                {next.text}
+              </Text>
+              <Text variant="caption" tone="tertiary" numberOfLines={1}>
+                {next.exerciseName}
+              </Text>
+            </View>
+          ) : (
+            <Text variant="eyebrow" tone="accent">
+              Rust
+            </Text>
+          )}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            <Button
+              label="−15 s"
+              variant="secondary"
+              size="sm"
+              haptic="selection"
+              onPress={() => actions.adjustRest(-15)}
+              accessibilityLabel="15 seconden minder rust"
+            />
+            <Button
+              label="+15 s"
+              variant="secondary"
+              size="sm"
+              haptic="selection"
+              onPress={() => actions.adjustRest(15)}
+              accessibilityLabel="15 seconden meer rust"
+            />
+          </View>
+          <Button
+            label="Overslaan"
+            variant="ghost"
+            size="sm"
+            onPress={() => actions.skipRest()}
+            accessibilityLabel="Rust overslaan"
+            style={{ marginLeft: -space.md }}
+          />
+        </View>
       </View>
-      <Button label="+30 s" variant="secondary" size="sm" haptic="selection" onPress={() => actions.adjustRest(30)} accessibilityLabel="30 seconden meer rust" />
-      <Button label="Skip" variant="ghost" size="sm" onPress={() => actions.skipRest()} accessibilityLabel="Rust overslaan" />
-    </View>
+    </Card>
   );
 }
 
@@ -369,7 +554,7 @@ export function ActiveWorkoutScreen() {
   const actions = useActiveWorkoutActions();
   const repos = useRepositories();
   const router = useRouter();
-  const { colors, space } = useTheme();
+  const { colors, layout, space } = useTheme();
   const now = useNow(workout !== null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
@@ -396,6 +581,7 @@ export function ActiveWorkoutScreen() {
   }
 
   const done = completedSetCount(workout);
+  const totalSets = workout.exercises.reduce((n, e) => n + e.sets.length, 0);
   const resting = workout.restEndsAt !== null && workout.restEndsAt > now;
   const volume = workoutVolumeKg(workout.exercises);
   // The "current" exercise (first with an open set) is expanded unless the user chose otherwise.
@@ -476,9 +662,7 @@ export function ActiveWorkoutScreen() {
             gap: space.sm,
             paddingHorizontal: space.md,
             paddingTop: space.xs,
-            paddingBottom: space.md,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border,
+            paddingBottom: space.sm,
           }}
         >
           <IconButton icon="chevron-down" accessibilityLabel="Minimaliseren" onPress={minimise} color={colors.text2} />
@@ -505,29 +689,48 @@ export function ActiveWorkoutScreen() {
                 }}
                 style={{ minHeight: 28, justifyContent: 'center' }}
               >
-                <Text variant="title" numberOfLines={1} style={{ fontSize: 22, lineHeight: 26 }}>
+                <Text variant="heading" numberOfLines={1} style={{ fontSize: 15, lineHeight: 20 }}>
                   {workout.title}
                 </Text>
               </Pressable>
             )}
             <View
               accessible
-              accessibilityLabel={`Bezig, ${formatElapsed(now - workout.startedAt)}, ${formatNumberNl(volume, 0)} kilo volume, ${done} sets afgevinkt`}
+              accessibilityLabel={`Bezig, ${formatElapsed(now - workout.startedAt)}, ${done} van ${totalSets} sets afgevinkt, ${formatNumberNl(volume, 0)} kilo volume`}
               style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 }}
             >
               <LiveDot size={7} />
-              <Text variant="caption" tone="secondary" tnum>
-                {formatElapsed(now - workout.startedAt)} · {formatNumberNl(volume, 0)} kg
+              <Text variant="caption" tone="tertiary" tnum style={{ fontSize: 12, lineHeight: 16 }}>
+                {formatElapsed(now - workout.startedAt)} · {done} van {totalSets} sets · {formatNumberNl(volume, 0)} kg
               </Text>
             </View>
           </View>
           <Button label="Klaar" size="sm" loading={busy} onPress={confirmFinish} accessibilityLabel="Training afronden" />
         </View>
+        <View style={{ marginHorizontal: layout.screenPadding }}>
+          <ProgressBar value={totalSets > 0 ? done / totalSets : 0} />
+        </View>
+
+        {resting && workout.restEndsAt !== null ? (
+          <View style={{ paddingHorizontal: layout.screenPadding, paddingTop: space.lg }}>
+            <RestHero
+              restEndsAt={workout.restEndsAt}
+              total={workout.restDurationSeconds ?? 0}
+              now={now}
+              next={findNextSet(workout.exercises)}
+            />
+          </View>
+        ) : null}
 
         <ScrollView
           keyboardShouldPersistTaps="handled"
           indicatorStyle="white"
-          contentContainerStyle={{ padding: space.lg, gap: space.md + 2, paddingBottom: space.xxl }}
+          contentContainerStyle={{
+            paddingHorizontal: layout.screenPadding,
+            paddingTop: space.lg,
+            gap: space.md + 2,
+            paddingBottom: space.xxl,
+          }}
         >
           {workout.exercises.length === 0 ? (
             <EmptyState icon="dumbbell" title="Nog geen oefeningen" body="Voeg je eerste oefening toe om sets te loggen." />
@@ -548,10 +751,6 @@ export function ActiveWorkoutScreen() {
           <Button label="Oefening toevoegen" icon="plus" variant="secondary" fullWidth onPress={() => router.push('/exercise/picker')} />
           <Button label="Training verwijderen" variant="ghost" fullWidth onPress={confirmDiscard} />
         </ScrollView>
-
-        {resting && workout.restEndsAt !== null ? (
-          <RestBar restEndsAt={workout.restEndsAt} total={workout.restDurationSeconds ?? 0} now={now} />
-        ) : null}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
