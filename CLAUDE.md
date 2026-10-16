@@ -67,7 +67,8 @@ Rules for working across features:
 - Shopify Storefront, Customer Account and Admin API: `2026-10` (`SHOPIFY_API_VERSION` in `constants.ts`; Edge Function mirror in `supabase/functions/_shared/config.ts`, a test keeps them equal). Latest stable on 2026-10-15, supported until 2027-10-16. Check once per quarter (ADR-10).
 - Consent texts: `POLICY_VERSION` in `constants.ts`; bump it when consent copy or the privacy policy changes.
 - Exact versions only in `package.json` (no `^`/`~`; `.npmrc` has `save-exact=true`, CI checks it).
-- Commit `package-lock.json`; CI then uses `npm ci` automatically. Until the lockfile exists (the build sandbox has no npm registry), CI runs `npm install` and uploads the generated lockfile as the `package-lock` artifact: download it from the first green run on `main`, run `npx expo install --check`, and commit it in a separate PR.
+- `package-lock.json` is committed and CI runs `npm ci`. After changing dependencies, regenerate it: delete the lockfile on a branch, push, and CI (on `main` only) publishes a fresh one to the `ci/lockfile` branch; fetch it, commit it, and delete that branch.
+- CI surfaces npm, ESLint and Jest failures as check-run annotations, so they are readable through the GitHub API without log access.
 
 ## Running the app
 
