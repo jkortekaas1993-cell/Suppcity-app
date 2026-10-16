@@ -41,7 +41,13 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
 
       - name: Apply database migrations
-        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all --yes
+        run: |
+          if ! supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all --yes > push.log 2>&1; then
+            # Surface the error (logs are not readable outside GitHub); strip anything secret-looking.
+            grep -v -i "password" push.log | tail -30 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
+          cat push.log
 
       - name: Push auth config (no public sign-ups)
         run: supabase config push --project-ref "$SUPABASE_PROJECT_REF" --yes || echo "::warning::config push failed; check auth settings in the dashboard"
