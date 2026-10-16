@@ -1,34 +1,41 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { View } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { formatMoney, type ProductSummary } from '@/lib/shopify';
-import { haptics, IconButton, Pill, PressableScale, Text, useTheme } from '@/ui';
+import { elevation, Glow, haptics, motion, Pill, PressableScale, radius, Text, useTheme } from '@/ui';
 
 import { cartStore } from '../state/cartStore';
+import { AddButton } from './AddButton';
 import { ProductImage } from './ProductImage';
 
 const openProduct = (handle: string) => router.push({ pathname: '/shop/product/[handle]', params: { handle } });
 
+/** How far the packshot lifts while the tile is pressed (mockup note m_shop). */
+const LIFT = 4;
+
 /**
- * Grid tile: packshot, brand eyebrow, name, price (tabular) and "+". The "+" adds the
- * product straight to the cart when it has a single variant in stock; otherwise it opens
- * the product so the user can pick a flavour.
+ * Grid tile (mockup Shop.dc.html): packshot on a softly lit well, brand eyebrow, name,
+ * price (tabular) and the accent "+". The "+" adds the product straight to the cart when it
+ * has a single variant in stock (it then turns into a check); otherwise it opens the product
+ * so the user can pick a flavour.
  */
 export function ProductTile({ product, bestseller = false }: { product: ProductSummary; bestseller?: boolean }) {
   const { colors, space } = useTheme();
-  const [adding, setAdding] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const lift = useSharedValue(0);
   const price = formatMoney(product.priceFrom);
 
-  async function add() {
+  const liftStyle = useAnimatedStyle(() => ({ transform: [{ translateY: -lift.get() }] }));
+
+  async function add(): Promise<boolean> {
     if (!product.quickAddVariantId) {
       openProduct(product.handle);
-      return;
+      return false;
     }
-    setAdding(true);
     const ok = await cartStore.add([{ variantId: product.quickAddVariantId, quantity: 1 }]);
-    setAdding(false);
     if (ok) haptics.success();
+    return ok;
   }
 
   return (
@@ -38,12 +45,50 @@ export function ProductTile({ product, bestseller = false }: { product: ProductS
         accessibilityLabel={[product.vendor, product.title, product.available ? price : 'uitverkocht'].filter(Boolean).join(', ')}
         haptic={false}
         onPress={() => openProduct(product.handle)}
-        style={{ gap: space.sm }}
+        onPressIn={() => {
+          if (!reduceMotion) lift.set(withTiming(LIFT, { duration: motion.base }));
+        }}
+        onPressOut={() => {
+          lift.set(withTiming(0, { duration: motion.slow }));
+        }}
+        style={{ gap: space.xs + 2 }}
       >
-        <View>
-          <ProductImageSlot product={product} />
+        <View
+          style={{
+            width: '100%',
+            aspectRatio: 1,
+            borderRadius: radius.lg,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.bg1,
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {/* ≈ radial-gradient(70% 70% at 50% 40%, teal-tinted centre → bg1) from the mockup. */}
+          <Glow intensity={0.1} style={{ position: 'absolute', left: '-20%', right: '-20%', top: '-30%', height: '140%' }} />
+          {/* Hairline top highlight (inset 0 1px 0 rgba(255,255,255,.05)). */}
+          <View
+            pointerEvents="none"
+            style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}
+          />
+          <Animated.View
+            style={[
+              {
+                width: '84%',
+                // iOS drop shadow follows the packshot's alpha. No Android elevation: it would
+                // draw a box and lift the image above the "Bestseller" pill.
+                ...elevation.card,
+                elevation: 0,
+              },
+              liftStyle,
+            ]}
+          >
+            <ProductImageSlot product={product} />
+          </Animated.View>
           {bestseller || !product.available ? (
-            <View style={{ position: 'absolute', top: space.sm, left: space.sm }}>
+            <View style={{ position: 'absolute', top: space.sm + 2, left: space.sm + 2 }}>
               {product.available ? <Pill label="Bestseller" tone="accent" /> : <Pill label="Uitverkocht" tone="neutral" />}
             </View>
           ) : null}
@@ -53,7 +98,7 @@ export function ProductTile({ product, bestseller = false }: { product: ProductS
             {product.vendor}
           </Text>
         ) : null}
-        <Text variant="bodyStrong" numberOfLines={2}>
+        <Text variant="bodyStrong" numberOfLines={2} style={{ lineHeight: 19 }}>
           {product.title}
         </Text>
       </PressableScale>
@@ -62,18 +107,11 @@ export function ProductTile({ product, bestseller = false }: { product: ProductS
           {price}
         </Text>
         {product.available ? (
-          <IconButton
-            icon="plus"
-            variant="filled"
-            size={36}
-            iconSize={20}
-            color={colors.accentText}
-            disabled={adding}
-            haptic="light"
+          <AddButton
             accessibilityLabel={
               product.quickAddVariantId ? `${product.title} toevoegen aan winkelwagen` : `${product.title}: kies een variant`
             }
-            onPress={() => void add()}
+            onAdd={add}
           />
         ) : null}
       </View>
@@ -83,5 +121,5 @@ export function ProductTile({ product, bestseller = false }: { product: ProductS
 
 // Split out so the image re-mounts per product (its load state is per URL).
 function ProductImageSlot({ product }: { product: ProductSummary }) {
-  return <ProductImage key={product.image?.url ?? product.id} image={product.image} />;
+  return <ProductImage key={product.image?.url ?? product.id} image={product.image} bordered={false} transparent />;
 }

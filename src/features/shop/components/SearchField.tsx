@@ -7,10 +7,13 @@ export function SearchField({
   value,
   onChangeText,
   placeholder = 'Zoek whey, creatine, pre-workout…',
+  autoFocus = false,
 }: {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
+  /** Focus on mount (the Shop opens the field from its header search button). */
+  autoFocus?: boolean;
 }) {
   const { colors, space, type } = useTheme();
   return (
@@ -37,6 +40,7 @@ export function SearchField({
         accessibilityLabel="Zoek producten"
         autoCorrect={false}
         autoCapitalize="none"
+        autoFocus={autoFocus}
         returnKeyType="search"
         inputMode="search"
         style={{ ...type.body, flex: 1, color: colors.text1, paddingVertical: space.sm }}
