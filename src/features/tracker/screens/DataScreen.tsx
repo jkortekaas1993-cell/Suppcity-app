@@ -53,11 +53,11 @@ export function DataScreen() {
     <StackScreen title="Data">
       <Card eyebrow="Exporteren">
         <Text>Al je trainingen en sets als CSV. Kolommen zijn gelijk aan een Hevy-export.</Text>
-        <Button label="Exporteer als CSV" loading={busy === 'export'} onPress={() => void doExport()} />
+        <Button label="Exporteer als CSV" icon="share" loading={busy === 'export'} onPress={() => void doExport()} />
       </Card>
 
       <Card eyebrow="Importeren uit Hevy of Strong">
-        <Text tone="muted">
+        <Text tone="secondary">
           Exporteer je data in Hevy (Profiel → Instellingen → Data exporteren) of Strong (Instellingen → Exporteer
           data) en kies het CSV-bestand of plak de inhoud hieronder. Onbekende oefeningen worden als eigen oefening
           aangemaakt. Al geïmporteerde trainingen worden overgeslagen.
@@ -70,7 +70,7 @@ export function DataScreen() {
           accessibilityLabel="CSV-inhoud"
           autoCapitalize="none"
           autoCorrect={false}
-          style={{ minHeight: 140, textAlignVertical: 'top', paddingTop: 12, fontSize: 13 }}
+          style={{ minHeight: 140, textAlignVertical: 'top', paddingTop: 12, fontSize: 13, lineHeight: 18 }}
         />
         <Button label="Importeren" variant="secondary" disabled={!csv.trim()} loading={busy === 'import'} onPress={() => void doImport()} />
         <Button
@@ -91,10 +91,10 @@ export function DataScreen() {
               {result.skipped > 0 ? `, ${result.skipped} al aanwezig` : ''}.
             </Text>
             {result.createdExercises.length > 0 ? (
-              <Text tone="muted">Nieuwe eigen oefeningen: {result.createdExercises.join(', ')}</Text>
+              <Text tone="secondary">Nieuwe eigen oefeningen: {result.createdExercises.join(', ')}</Text>
             ) : null}
             {result.warnings.slice(0, 5).map((w) => (
-              <Text key={w} variant="caption" tone="muted">
+              <Text key={w} variant="caption" tone="tertiary">
                 {w}
               </Text>
             ))}

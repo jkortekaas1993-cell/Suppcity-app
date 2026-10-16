@@ -87,5 +87,14 @@ export interface WorkoutSet extends SyncFields {
   completed_at: IsoDateTime | null;
 }
 
+/** An earned milestone (local only; see schema migration 3). */
+export interface UserBadge extends SyncFields {
+  /** Catalogue id, e.g. "bench_100" (src/features/tracker/logic/badges.ts). */
+  badge_id: string;
+  earned_at: IsoDateTime;
+  /** The workout that earned it. */
+  source_ref: Uuid | null;
+}
+
 /** Input type for inserts: sync fields are filled in by the repository. */
 export type NewRow<T extends SyncFields> = Omit<T, keyof SyncFields> & Partial<Pick<T, 'id' | 'user_id'>>;

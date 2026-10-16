@@ -59,3 +59,10 @@ export function formatRepRange(min: number | null, max: number | null): string {
   if (min == null || max == null || min === max) return `${min ?? max}`;
   return `${min}–${max}`;
 }
+
+/** Rough duration of a routine in minutes: ~45 s work per set plus its rest, rounded to 5. */
+export function estimateRoutineMinutes(exercises: readonly { target_sets: number; rest_seconds: number }[]): number {
+  const seconds = exercises.reduce((sum, e) => sum + Math.max(0, e.target_sets) * (45 + Math.max(0, e.rest_seconds)), 0);
+  if (seconds <= 0) return 0;
+  return Math.max(5, Math.round(seconds / 60 / 5) * 5);
+}

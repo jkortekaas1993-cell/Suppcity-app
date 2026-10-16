@@ -2,6 +2,7 @@ import { EXERCISES_NL } from '@/content/exercises.nl';
 
 import type {
   AppStateRepository,
+  BadgeRepository,
   DataPortRepository,
   ExerciseRepository,
   ExerciseSetHistoryRow,
@@ -22,6 +23,7 @@ import type {
   NewRow,
   Routine,
   RoutineExercise,
+  UserBadge,
   Uuid,
   Workout,
   WorkoutSet,
@@ -573,6 +575,37 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     },
   };
 
+  // --- milestones (local only) ---------------------------------------------------
+  const badges: BadgeRepository = {
+    list() {
+      return db.getAllAsync<UserBadge>(
+        `SELECT * FROM user_badges WHERE ${NOT_DELETED} ORDER BY earned_at, badge_id`,
+        [],
+      );
+    },
+    async addMany(rows) {
+      if (rows.length === 0) return [];
+      const inserted: string[] = [];
+      const now = deps.now();
+      await db.withTransactionAsync(async () => {
+        for (const r of rows) {
+          const exists = await db.getFirstAsync<{ id: string }>(
+            `SELECT id FROM user_badges WHERE badge_id = ? AND ${NOT_DELETED}`,
+            [r.badge_id],
+          );
+          if (exists) continue;
+          await db.runAsync(
+            `INSERT INTO user_badges (id, user_id, badge_id, earned_at, source_ref, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [deps.newId(), userId(), r.badge_id, r.earned_at, r.source_ref, now, now],
+          );
+          inserted.push(r.badge_id);
+        }
+      });
+      return inserted;
+    },
+  };
+
   // --- sync seam (Backend&Sync builds on this) ---------------------------------
   const columnCache = new Map<TrackerTable, Set<string>>();
   function assertTable(table: string): TrackerTable {
@@ -680,7 +713,7 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
   async function wipeLocalData(): Promise<void> {
     await db.withTransactionAsync(async () => {
       // Children first (foreign keys), then the local-only app_state (incl. sync cursors).
-      for (const t of ['sets', 'routine_exercises', 'workouts', 'routines', 'exercises', 'app_state'] as const) {
+      for (const t of ['sets', 'routine_exercises', 'workouts', 'routines', 'exercises', 'user_badges', 'app_state'] as const) {
         await db.runAsync(`DELETE FROM ${t}`, []);
       }
     });
@@ -688,5 +721,5 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     await seedLibrary();
   }
 
-  return { exercises, routines, workouts, sets, dataPort, appState, sync, seedLibrary, wipeLocalData };
+  return { exercises, routines, workouts, sets, dataPort, appState, badges, sync, seedLibrary, wipeLocalData };
 }

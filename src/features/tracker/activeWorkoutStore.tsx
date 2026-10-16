@@ -9,9 +9,9 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { Vibration } from 'react-native';
 
 import { newId, nowIso, useRepositories, type Repositories, type SetType, type WorkoutSet } from '@/lib/db';
+import { haptics } from '@/ui';
 
 import { restTimerAllowed } from './logic/notificationPrefs';
 import { installForegroundNotificationHandler, loadNotificationPrefs, osPermissionGranted } from './notifications';
@@ -41,6 +41,8 @@ export type { ActiveWorkoutState } from './logic/activeWorkoutReducer';
 const SNAPSHOT_KEY = 'tracker.activeWorkout';
 const REST_PREFS_KEY = 'tracker.restSeconds';
 const PERSIST_DEBOUNCE_MS = 300;
+/** Heads-up haptic this long before the rest timer ends. */
+const REST_WARNING_MS = 10_000;
 
 export interface ActiveWorkoutActions {
   startEmpty(): Promise<void>;
@@ -181,7 +183,7 @@ export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWor
     };
   }, [state, persistNow]);
 
-  // --- rest timer: local notification + in-app vibration -------------------------
+  // --- rest timer: local notification + in-app haptics -------------------------
   const restEndsAt = state?.restEndsAt ?? null;
   useEffect(() => {
     let cancelled = false;
@@ -192,8 +194,10 @@ export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWor
     const ms = restEndsAt - Date.now();
     if (ms <= 0) return;
 
+    // Haptics: a light tap 10 s before the end, a firm one when rest is over.
+    const warn = ms > REST_WARNING_MS + 500 ? setTimeout(() => haptics.light(), ms - REST_WARNING_MS) : null;
     const timeout = setTimeout(() => {
-      Vibration.vibrate(400);
+      haptics.medium();
       dispatch({ type: 'skipRest' });
     }, ms);
 
@@ -214,6 +218,7 @@ export function ActiveWorkoutProvider({ children, onWorkoutFinished }: ActiveWor
     return () => {
       cancelled = true;
       clearTimeout(timeout);
+      if (warn) clearTimeout(warn);
       const id = restNotificationId.current;
       restNotificationId.current = null;
       if (id) void Notifications.cancelScheduledNotificationAsync(id).catch(() => undefined);

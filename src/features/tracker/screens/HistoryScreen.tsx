@@ -2,11 +2,11 @@ import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { useRepositories, type WorkoutListItem } from '@/lib/db';
-import { Button, ListItem, Text } from '@/ui';
+import { Button, Card, ListRow, Text } from '@/ui';
 
 import { StackScreen } from '../components/StackScreen';
 import { useFocusQuery } from '../components/useFocusQuery';
-import { formatDateNl, formatDuration, formatKg } from '../logic/format';
+import { formatDateNl, formatDuration, formatNumberNl } from '../logic/format';
 
 const PAGE = 30;
 
@@ -42,16 +42,21 @@ export function HistoryScreen() {
 
   return (
     <StackScreen title="Historie">
-      {data && items.length === 0 ? <Text tone="muted">Nog geen afgeronde trainingen.</Text> : null}
-      {items.map((w) => (
-        <ListItem
-          key={w.id}
-          title={w.title}
-          subtitle={workoutSubtitle(w)}
-          value={formatKg(w.volume_kg, 0)}
-          onPress={() => router.push(`/workout/${w.id}`)}
-        />
-      ))}
+      {data && items.length === 0 ? <Text tone="secondary">Nog geen afgeronde trainingen.</Text> : null}
+      {items.length > 0 ? (
+        <Card padding={0} gap={0}>
+          {items.map((w, i) => (
+            <ListRow
+              key={w.id}
+              title={w.title}
+              subtitle={workoutSubtitle(w)}
+              value={`${formatNumberNl(w.volume_kg, 0)} kg`}
+              divider={i < items.length - 1}
+              onPress={() => router.push(`/workout/${w.id}`)}
+            />
+          ))}
+        </Card>
+      ) : null}
       {!end && items.length > 0 ? <Button label="Meer laden" variant="secondary" fullWidth onPress={() => void loadMore()} /> : null}
     </StackScreen>
   );
