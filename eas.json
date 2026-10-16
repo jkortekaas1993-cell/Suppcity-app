@@ -1,0 +1,28 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_SHOPIFY_STORE_DOMAIN": "74e741-f9.myshopify.com",
+        "EXPO_PUBLIC_SHOPIFY_STOREFRONT_TOKEN": "eda6355272aa3ce317efef3acda3dd3b",
+        "EXPO_PUBLIC_SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID": "3550cb22-1582-43a8-ab0a-e2c67c284f0a",
+        "EXPO_PUBLIC_SHOPIFY_SHOP_ID": "82703090012",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://btofgvfoalwufvkhttrt.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_CQHVOOjxQ2uiwjtROY0DHQ_FRshchTi"
+      }
+    },
+    "production": {
+      "extends": "preview",
+      "distribution": "store",
+      "channel": "production",
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" }
+    }
+  }
+}

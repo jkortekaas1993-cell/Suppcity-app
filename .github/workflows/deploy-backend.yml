@@ -1,0 +1,83 @@
+name: Deploy backend (Supabase)
+
+# Manual: Actions → "Deploy backend (Supabase)" → Run workflow.
+# Applies migrations, pushes auth config, sets function secrets and deploys Edge Functions.
+# Secrets live only in GitHub (Settings → Secrets and variables → Actions) and Supabase.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+env:
+  SUPABASE_PROJECT_REF: btofgvfoalwufvkhttrt
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        run: |
+          missing=0
+          for s in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD; do
+            if [ -z "${!s}" ]; then echo "::error::GitHub secret $s is not set"; missing=1; fi
+          done
+          exit $missing
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Apply database migrations
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all --yes
+
+      - name: Push auth config (no public sign-ups)
+        run: supabase config push --project-ref "$SUPABASE_PROJECT_REF" --yes || echo "::warning::config push failed; check auth settings in the dashboard"
+
+      - name: Set function secrets
+        env:
+          SHOPIFY_WEBHOOK_SECRET: ${{ secrets.SHOPIFY_WEBHOOK_SECRET }}
+          SHOPIFY_ADMIN_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ADMIN_ACCESS_TOKEN }}
+        run: |
+          # Public, non-secret values.
+          supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" \
+            SHOPIFY_STOREFRONT_DOMAIN=suppcity.nl \
+            SHOPIFY_SHOP_DOMAIN=74e741-f9.myshopify.com
+          # REDEEM_CODE_SECRET: generated once on the runner, never printed, never changed afterwards.
+          if ! supabase secrets list --project-ref "$SUPABASE_PROJECT_REF" | grep -q REDEEM_CODE_SECRET; then
+            supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" REDEEM_CODE_SECRET="$(openssl rand -hex 32)"
+          fi
+          # Shopify app secrets (points & webhooks). Optional until the Shopify custom app exists.
+          if [ -n "$SHOPIFY_WEBHOOK_SECRET" ]; then
+            supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" SHOPIFY_WEBHOOK_SECRET="$SHOPIFY_WEBHOOK_SECRET"
+          else echo "::warning::SHOPIFY_WEBHOOK_SECRET not set yet: order points webhooks will be rejected"; fi
+          if [ -n "$SHOPIFY_ADMIN_ACCESS_TOKEN" ]; then
+            supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" SHOPIFY_ADMIN_ACCESS_TOKEN="$SHOPIFY_ADMIN_ACCESS_TOKEN"
+          else echo "::warning::SHOPIFY_ADMIN_ACCESS_TOKEN not set yet: redeeming points is unavailable"; fi
+
+      - name: Deploy Edge Functions
+        run: |
+          for fn in shopify-auth-exchange delete-account redeem-points shopify-webhooks; do
+            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api
+          done
+
+      - name: Summary
+        run: |
+          {
+            echo "### Supabase backend deployed"
+            echo "- Project: \`$SUPABASE_PROJECT_REF\` (EU, eu-west-1)"
+            echo "- Functions: shopify-auth-exchange, delete-account, redeem-points, shopify-webhooks"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice::Backend deployed to $SUPABASE_PROJECT_REF"
