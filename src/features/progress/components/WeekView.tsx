@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { EmptyState, StatTile, Text, useTheme } from '@/ui';
+import { Appear, EmptyState, StatTile, Text, useTheme } from '@/ui';
 
 import { formatDuration, formatNumberNl, formatSigned, formatVolume, roundTo } from '../logic/format';
 import type { WeekSummary } from '../logic/week';
@@ -27,7 +27,7 @@ export function WeekView({ week, loading }: { week: WeekSummary | undefined; loa
       <Text variant="caption" tone="tertiary">
         Deze week (vanaf maandag), vergeleken met vorige week.
       </Text>
-      <View style={{ flexDirection: 'row', gap: space.md }}>
+      <Appear index={0} style={{ flexDirection: 'row', gap: space.md }}>
         <View style={{ flex: 1 }}>
           <StatTile
             label="Trainingen"
@@ -44,8 +44,8 @@ export function WeekView({ week, loading }: { week: WeekSummary | undefined; loa
             delta={{ label: formatSigned(delta.sets), direction: direction(delta.sets) }}
           />
         </View>
-      </View>
-      <View style={{ flexDirection: 'row', gap: space.md }}>
+      </Appear>
+      <Appear index={1} style={{ flexDirection: 'row', gap: space.md }}>
         <View style={{ flex: 1 }}>
           <StatTile
             label="Duur"
@@ -71,8 +71,10 @@ export function WeekView({ week, loading }: { week: WeekSummary | undefined; loa
             }
           />
         </View>
-      </View>
-      <MuscleSetsCard muscles={week.muscles} />
+      </Appear>
+      <Appear index={2}>
+        <MuscleSetsCard muscles={week.muscles} />
+      </Appear>
     </View>
   );
 }

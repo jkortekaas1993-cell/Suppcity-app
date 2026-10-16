@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Card, Chip, EmptyState, Icon, LineChart, ListRow, StatTile, Text, useTheme } from '@/ui';
+import { Appear, Card, EmptyState, Icon, LineChart, ListRow, Segmented, StatTile, Text, useTheme } from '@/ui';
 
 import { loadExerciseOptions, loadExerciseSessions } from '../data/loaders';
 import type { ReadDb } from '../data/queries';
@@ -15,11 +15,56 @@ import {
   trendSentence,
   type ProgressPeriod,
 } from '../logic/exerciseStats';
-import { formatKg, formatNumberNl, formatSigned, formatVolume } from '../logic/format';
+import { formatKg, formatNumberNl, formatSigned, formatVolume, MONTHS_NL } from '../logic/format';
 import type { WeekSummary } from '../logic/week';
 import { MuscleSetsCard } from './MuscleSetsCard';
 
-/** Voortgang → Oefening: e1RM over time for one exercise, plus heaviest set and best volume. */
+const PERIOD_OPTIONS = PERIODS.map((p) => ({ value: p.value, label: p.label }));
+
+/** "16 okt" for the "Laatste record" line. */
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getDate()} ${MONTHS_NL[d.getMonth()] ?? ''}`;
+}
+
+/** Count tile from the mockup: eyebrow, big condensed number (gold for records), one caption line. */
+function CountTile({
+  label,
+  value,
+  caption,
+  gold = false,
+  accessibilityLabel,
+}: {
+  label: string;
+  value: string;
+  caption?: string;
+  gold?: boolean;
+  accessibilityLabel: string;
+}) {
+  const { space } = useTheme();
+  return (
+    <Card gap={space.xs} accessible accessibilityLabel={accessibilityLabel} style={{ flex: 1 }}>
+      <Text variant="eyebrow" tone="secondary" style={{ letterSpacing: 1.4 }} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text variant="metric" tone={gold ? 'gold' : 'default'}>
+        {value}
+      </Text>
+      {caption ? (
+        <Text variant="caption" tone="tertiary" style={{ fontSize: 12, lineHeight: 16 }} numberOfLines={2}>
+          {caption}
+        </Text>
+      ) : null}
+    </Card>
+  );
+}
+
+/**
+ * Voortgang → Oefening (design round 3, Voortgang.dc.html): period control, the e1RM chart as
+ * the hero card, count tiles (workouts, records), heaviest set and best volume, sets per muscle.
+ * Cards enter staggered; the chart line draws itself and replays smoothly on a period switch.
+ */
 export function ExerciseView({ week }: { week: WeekSummary | undefined }) {
   const router = useRouter();
   const { space } = useTheme();
@@ -42,10 +87,8 @@ export function ExerciseView({ week }: { week: WeekSummary | undefined }) {
   const sessionsQuery = useProgressQuery(loadSessions);
   const sessions = sessionsQuery.data?.id === exerciseId ? sessionsQuery.data.sessions : undefined;
 
-  const summary = useMemo(
-    () => (sessions ? summarizeExercise(filterByPeriod(sessions, period, new Date())) : undefined),
-    [sessions, period],
-  );
+  const inPeriod = useMemo(() => (sessions ? filterByPeriod(sessions, period, new Date()) : undefined), [sessions, period]);
+  const summary = useMemo(() => (inPeriod ? summarizeExercise(inPeriod) : undefined), [inPeriod]);
 
   if (options.loading && !options.data) return null;
 
@@ -61,52 +104,67 @@ export function ExerciseView({ week }: { week: WeekSummary | undefined }) {
     );
   }
 
-  const periodLabel = PERIODS.find((p) => p.value === period)?.label ?? '';
+  const periodWords = PERIODS.find((p) => p.value === period)?.words ?? '';
   const points = summary?.points ?? [];
   const delta = summary?.deltaE1rm ?? null;
   const volume = summary?.bestVolumeKg != null ? formatVolume(summary.bestVolumeKg) : null;
+  const workouts = inPeriod?.length ?? 0;
+  const prCount = summary?.prCount ?? 0;
+  const lastPr = [...points].reverse().find((p) => p.pr);
 
   return (
     <View style={{ gap: space.md }}>
-      <Card gap={10}>
-        <ExerciseHeader
-          name={exercise.name}
-          periodLabel={periodLabel}
-          open={pickerOpen}
-          onToggle={() => setPickerOpen((o) => !o)}
-        />
-        {pickerOpen ? (
-          <Card variant="inset" padding={0}>
-            {list.map((o, i) => (
-              <ListRow
-                key={o.id}
-                title={o.name}
-                subtitle={`${formatNumberNl(o.workouts)} ${o.workouts === 1 ? 'training' : 'trainingen'}`}
-                trailing={o.id === exercise.id ? <Icon name="check" size={18} /> : undefined}
-                divider={i < list.length - 1}
-                accessibilityLabel={`${o.name}, ${o.workouts} trainingen${o.id === exercise.id ? ', gekozen' : ''}`}
-                onPress={() => {
-                  setSelected(o.id);
-                  setPickerOpen(false);
-                }}
-              />
-            ))}
-          </Card>
-        ) : (
-          <>
-            <E1rmHeadline value={summary?.latestE1rm ?? null} delta={delta} />
-            <ChartBlock exerciseName={exercise.name} period={period} summary={summary} />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-              {PERIODS.map((p) => (
-                <Chip key={p.value} label={p.label} selected={p.value === period} onPress={() => setPeriod(p.value)} />
+      <Segmented options={PERIOD_OPTIONS} value={period} onChange={setPeriod} accessibilityLabel="Periode" />
+
+      <Appear index={0}>
+        <Card variant="hero" gap={6} padding={16}>
+          <ExerciseHeader name={exercise.name} open={pickerOpen} onToggle={() => setPickerOpen((o) => !o)} />
+          {pickerOpen ? (
+            <Card variant="inset" padding={0}>
+              {list.map((o, i) => (
+                <ListRow
+                  key={o.id}
+                  title={o.name}
+                  subtitle={`${formatNumberNl(o.workouts)} ${o.workouts === 1 ? 'training' : 'trainingen'}`}
+                  trailing={o.id === exercise.id ? <Icon name="check" size={18} /> : undefined}
+                  divider={i < list.length - 1}
+                  accessibilityLabel={`${o.name}, ${o.workouts} trainingen${o.id === exercise.id ? ', gekozen' : ''}`}
+                  onPress={() => {
+                    setSelected(o.id);
+                    setPickerOpen(false);
+                  }}
+                />
               ))}
-            </View>
-          </>
-        )}
-      </Card>
+            </Card>
+          ) : (
+            <>
+              <E1rmHeadline value={summary?.latestE1rm ?? null} delta={delta} />
+              <ChartBlock exerciseName={exercise.name} period={period} summary={summary} />
+            </>
+          )}
+        </Card>
+      </Appear>
+
+      {summary ? (
+        <Appear index={1} style={{ flexDirection: 'row', gap: space.sm + 2 }}>
+          <CountTile
+            label="Trainingen"
+            value={formatNumberNl(workouts)}
+            caption={periodWords}
+            accessibilityLabel={`${workouts} ${workouts === 1 ? 'training' : 'trainingen'} met ${exercise.name} ${periodWords}`}
+          />
+          <CountTile
+            label="Records"
+            value={formatNumberNl(prCount)}
+            gold={prCount > 0}
+            caption={lastPr ? `Laatste: ${shortDate(lastPr.startedAt)}` : 'Nog geen record in deze periode'}
+            accessibilityLabel={`${prCount} ${prCount === 1 ? 'record' : 'records'} ${periodWords}${lastPr ? `, laatste op ${shortDate(lastPr.startedAt)}` : ''}`}
+          />
+        </Appear>
+      ) : null}
 
       {points.length > 0 || summary?.heaviest ? (
-        <View style={{ flexDirection: 'row', gap: space.md }}>
+        <Appear index={2} style={{ flexDirection: 'row', gap: space.sm + 2 }}>
           <View style={{ flex: 1 }}>
             <StatTile
               label="Zwaarste set"
@@ -117,25 +175,17 @@ export function ExerciseView({ week }: { week: WeekSummary | undefined }) {
           <View style={{ flex: 1 }}>
             <StatTile label="Beste volume" value={volume?.value ?? '–'} unit={volume?.unit} caption="per training" />
           </View>
-        </View>
+        </Appear>
       ) : null}
 
-      <MuscleSetsCard muscles={week?.muscles} />
+      <Appear index={3}>
+        <MuscleSetsCard muscles={week?.muscles} />
+      </Appear>
     </View>
   );
 }
 
-function ExerciseHeader({
-  name,
-  periodLabel,
-  open,
-  onToggle,
-}: {
-  name: string;
-  periodLabel: string;
-  open: boolean;
-  onToggle: () => void;
-}) {
+function ExerciseHeader({ name, open, onToggle }: { name: string; open: boolean; onToggle: () => void }) {
   const { colors, space } = useTheme();
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm }}>
@@ -152,8 +202,8 @@ function ExerciseHeader({
         </Text>
         <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.text2} />
       </Pressable>
-      <Text variant="caption" tone="tertiary">
-        {periodLabel}
+      <Text variant="caption" tone="tertiary" style={{ fontSize: 12 }}>
+        Geschat 1RM
       </Text>
     </View>
   );
@@ -173,8 +223,8 @@ function E1rmHeadline({ value, delta }: { value: number | null; delta: number | 
       }
     >
       <Text variant="hero">{value === null ? '–' : formatNumberNl(value)}</Text>
-      <Text variant="body" tone="secondary">
-        kg geschat 1RM
+      <Text variant="body" tone="secondary" style={{ fontSize: 16 }}>
+        kg
       </Text>
       {shownDelta ? (
         <Text variant="bodyStrong" tone={delta !== null && delta > 0.5 ? 'success' : 'tertiary'} tnum>
