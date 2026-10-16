@@ -4,6 +4,11 @@ name: Align dependencies with Expo SDK
 # regenerates package-lock.json and pushes the result to the ci/deps branch for review.
 on:
   workflow_dispatch:
+    inputs:
+      packages:
+        description: Space-separated packages to add with `npx expo install` (optional)
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -18,6 +23,10 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --no-audit --no-fund
+      - name: Add packages
+        if: inputs.packages != ''
+        run: |
+          npx expo install ${{ inputs.packages }} > add.log 2>&1 || (tail -30 add.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1)
       - name: expo install --fix
         run: |
           npx expo install --fix > fix.log 2>&1 || (tail -30 fix.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1)
