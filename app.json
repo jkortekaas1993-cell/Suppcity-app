@@ -24,7 +24,8 @@
         {
           "color": "#1FC7B6"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": false
