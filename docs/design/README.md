@@ -19,6 +19,17 @@ Accent turquoise only for: primary action, live state (running workout/timer), c
 Icons: own SVG icons via react-native-svg (no icon library), 24px, 2px stroke.
 Owner's exact logo hex is unknown; keep #1FC7B6 in ONE token so it can be swapped.
 
+## Round 3 additions (ADR-18)
+
+- `BrandMark` — the logo tile (Vandaag header 36, points card 28, PR line 22).
+- `Skyline` — logo skyline vector; `reveal` none / rise (intro) / sweep (PR). `Card skyline` draws it
+  along the bottom half of a card. One per screen.
+- `BrandIntro` — < 1 s continuation of the native splash (root layout).
+- `Card variant="brand"` — solid turquoise banner (shop "Opnieuw bestellen"); counts as the screen's accent.
+- Motion: `Appear` (stagger 60 ms), `Breathe` (primary action halo), `Glow` (radial light),
+  `Sheen` (points card), `CountUp` (PR number); `Ring animateIn / glow`; `LineChart` draws in.
+- Tokens: `colors.highlight` (hairline top edge), `radius.xxl`, `elevation`, `motion.stagger/enter/draw/breathe/sheen`.
+
 ## Design system (`src/ui`) — component catalogue
 
 Everything is imported from `@/ui`. Tokens live in ONE file, `src/ui/tokens.ts` (colours, spacing, radii,

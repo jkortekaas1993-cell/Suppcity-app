@@ -73,17 +73,23 @@ export function Card({
   const content = (
     <>
       {skyline ? (
-        <Skyline
-          color={isBrand ? colors.onAccent : variant === 'gold' ? colors.gold : colors.accent}
-          opacity={isBrand ? 0.85 : 0.16}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: -1, width: '100%' }}
-        />
+        // Bottom half only, so the tallest towers never run behind the card's text.
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: -1, height: '55%', overflow: 'hidden', justifyContent: 'flex-end' }}
+        >
+          <Skyline
+            color={isBrand ? colors.onAccent : variant === 'gold' ? colors.gold : colors.accent}
+            opacity={isBrand ? 0.22 : 0.16}
+            style={{ width: '100%' }}
+          />
+        </View>
       ) : null}
       {variant === 'inset' || isBrand ? null : (
         // Hairline top highlight: the "lit from above" edge of the premium cards.
         <View
           pointerEvents="none"
-          style={{ position: 'absolute', top: 0, left: 16, right: 16, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' }}
+          style={{ position: 'absolute', top: 0, left: 16, right: 16, height: 1, backgroundColor: colors.highlight }}
         />
       )}
       {eyebrow ? (

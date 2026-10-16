@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useLayoutEffect, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
@@ -93,7 +93,8 @@ export function LineChart({
   const length = Math.ceil(polylineLength(points)) + 2;
   const drawn = useSharedValue(reduceMotion ? 1 : 0);
   const signature = `${width}|${values.join(',')}`;
-  useEffect(() => {
+  // Layout effect: reset before paint, so new data never flashes fully drawn for a frame.
+  useLayoutEffect(() => {
     if (reduceMotion || width === 0) {
       drawn.set(1);
       return;

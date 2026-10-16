@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -460,6 +460,20 @@ function findNextSet(exercises: readonly ActiveExercise[]): NextSet | null {
   return null;
 }
 
+/** True while the on-screen keyboard is open (typing kg/reps during rest). */
+function useKeyboardOpen(): boolean {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setOpen(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return open;
+}
+
 /**
  * Rest timer as the hero card (mockup): a big glowing ring that counts down live, with the next
  * set and −15 s / +15 s beside it. Ticks on each of the last three seconds.
@@ -467,6 +481,9 @@ function findNextSet(exercises: readonly ActiveExercise[]): NextSet | null {
 function RestHero({ restEndsAt, total, now, next }: { restEndsAt: number; total: number; now: number; next: NextSet | null }) {
   const actions = useActiveWorkoutActions();
   const { radius, space } = useTheme();
+  // With the keyboard open the set list needs the room: shrink to a compact ring.
+  const compact = useKeyboardOpen();
+  const ringSize = compact ? 64 : REST_RING;
   const left = Math.max(0, restEndsAt - now);
   const progress = total > 0 ? left / (total * 1000) : 0;
   const secondsLeft = Math.ceil(left / 1000);
@@ -481,26 +498,32 @@ function RestHero({ restEndsAt, total, now, next }: { restEndsAt: number; total:
   }, [secondsLeft]);
 
   return (
-    <Card variant="hero" padding={18} style={{ borderRadius: radius.xxl }}>
+    <Card variant="hero" padding={compact ? 12 : 18} style={{ borderRadius: radius.xxl }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg + 2 }}>
         <Ring
           progress={progress}
-          size={REST_RING}
-          strokeWidth={10}
-          glow
+          size={ringSize}
+          strokeWidth={compact ? 6 : 10}
+          glow={!compact}
           accessibilityLabel={`Rusttimer, ${spokenDuration(left)} over`}
         >
           <View style={{ alignItems: 'center' }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-            <Text variant="hero" style={{ fontSize: 44, lineHeight: 46 }} maxFontSizeMultiplier={1.1}>
+            <Text
+              variant="hero"
+              style={compact ? { fontSize: 18, lineHeight: 20 } : { fontSize: 44, lineHeight: 46 }}
+              maxFontSizeMultiplier={1.1}
+            >
               {formatCountdown(left)}
             </Text>
-            <Text variant="micro" tone="tertiary" style={{ fontSize: 12, letterSpacing: 1.2 }} maxFontSizeMultiplier={1.2}>
-              RUST
-            </Text>
+            {compact ? null : (
+              <Text variant="micro" tone="tertiary" style={{ fontSize: 12, letterSpacing: 1.2 }} maxFontSizeMultiplier={1.2}>
+                RUST
+              </Text>
+            )}
           </View>
         </Ring>
         <View style={{ flex: 1, gap: space.sm + 2 }}>
-          {next ? (
+          {compact ? null : next ? (
             <View accessible accessibilityLabel={next.spoken} style={{ gap: space.xxs }}>
               <Text variant="eyebrow" tone="accent">
                 Hierna
@@ -534,15 +557,26 @@ function RestHero({ restEndsAt, total, now, next }: { restEndsAt: number; total:
               onPress={() => actions.adjustRest(15)}
               accessibilityLabel="15 seconden meer rust"
             />
+            {compact ? (
+              <Button
+                label="Overslaan"
+                variant="ghost"
+                size="sm"
+                onPress={() => actions.skipRest()}
+                accessibilityLabel="Rust overslaan"
+              />
+            ) : null}
           </View>
-          <Button
-            label="Overslaan"
-            variant="ghost"
-            size="sm"
-            onPress={() => actions.skipRest()}
-            accessibilityLabel="Rust overslaan"
-            style={{ marginLeft: -space.md }}
-          />
+          {compact ? null : (
+            <Button
+              label="Overslaan"
+              variant="ghost"
+              size="sm"
+              onPress={() => actions.skipRest()}
+              accessibilityLabel="Rust overslaan"
+              style={{ marginLeft: -space.md }}
+            />
+          )}
         </View>
       </View>
     </Card>

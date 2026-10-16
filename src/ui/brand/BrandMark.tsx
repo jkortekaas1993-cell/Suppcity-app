@@ -1,5 +1,7 @@
 import { Image, type ImageStyle, type StyleProp } from 'react-native';
 
+import { useTheme } from '../ThemeProvider';
+
 // The app icon itself (rounded), so the logo in the app is pixel-identical to the home screen.
 const MARK = require('../../../assets/brand/mark.png') as number;
 
@@ -13,6 +15,7 @@ export interface BrandMarkProps {
 
 /** The Supp City logo tile. Header of Vandaag, the points card, the PR moment. */
 export function BrandMark({ size = 36, accessibilityLabel, style }: BrandMarkProps) {
+  const { colors } = useTheme();
   const decorative = accessibilityLabel === undefined;
   return (
     <Image
@@ -28,7 +31,7 @@ export function BrandMark({ size = 36, accessibilityLabel, style }: BrandMarkPro
           height: size,
           borderRadius: Math.round(size * 0.24),
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.08)',
+          borderColor: colors.highlight,
         },
         style,
       ]}

@@ -90,7 +90,7 @@ export function PointsPanel() {
         {/* Hairline top highlight: the "lit from above" edge of the premium cards. */}
         <View
           pointerEvents="none"
-          style={{ position: 'absolute', top: 0, left: 16, right: 16, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }}
+          style={{ position: 'absolute', top: 0, left: 16, right: 16, height: 1, backgroundColor: colors.highlight }}
         />
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>

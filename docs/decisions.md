@@ -70,3 +70,16 @@ Short ADRs. Add a new one at the bottom; do not rewrite old ones (mark them "Sup
 ## ADR-17: ReorderCard gets only "days left per variant" from supplements
 - **Decision:** The only supplement data that reaches the shop is `getSupplementStockForReorder()` → `{ variantGid, productTitle (the user's own name), daysLeft }` for linked supplements at or below `LOW_STOCK_DAYS`. `daysLeft` is computed on the device from `units_left` and the user's own schedule (planned servings per week), not from the intake log. No intakes, times, doses, schedule or adherence go to the shop, Shopify, Metricool or MyChatBot, and nothing is stored or sent server-side: the card only puts the variant in the cart when the user taps "Bestel". "Bestel" ADDS to the existing cart (it never empties it) and opens the cart.
 - **Why:** Hard rule 1 (body and health data are never used for marketing or segmentation). Supplement intake is health data; a stock estimate per product is what a reorder reminder needs and nothing more. Review M4: replacing the cart silently threw away what the user had already added.
+
+## ADR-18: Design round 3 — brand turquoise, logo and motion
+
+Owner-approved 2026-10-16 (mockups: Claude design canvas "Supp City App — Design ronde 3").
+- `ACCENT` is the webshop turquoise `#14D7D1`; the logo's lighter `#5CE1E6` (`BRAND_LIGHT`) is only
+  used on brand surfaces (shop banner gradient, Android adaptive-icon background).
+- App icon, adaptive/monochrome icon and native splash come from the existing Supp City logo
+  (`assets/brand/`). The skyline in the app is a vector traced from that logo
+  (`docs/design/skyline-trace.py`), never a new drawing.
+- Motion is part of the design system (`src/ui/motion`): enter stagger, breathing primary action,
+  ring/line draw-in, PR count-up and sweep, points-card sheen. Every animation honours the system
+  "reduce motion" setting; no chance or slot-machine style effects (hard rule 5).
+- One deliberate exception to "no turquoise on headings": the second line of the Vandaag headline.

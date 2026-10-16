@@ -145,7 +145,7 @@ export function VandaagScreen({ smartCard, supplementCard, weekVolumeTile }: Van
     }
     return { next, plan, last, recent, goal };
   }, [repos]);
-  const { data, reload } = useFocusQuery(load);
+  const { data, loading, error, reload } = useFocusQuery(load);
 
   const now = Date.now();
   const progress = weekGoalProgress(
@@ -168,8 +168,9 @@ export function VandaagScreen({ smartCard, supplementCard, weekVolumeTile }: Van
   const lastOfRoutine = nextId ? (data?.recent ?? []).find((w) => w.routine_id === nextId) : undefined;
   // A workout is "planned today" when there is a next routine and nothing was trained today yet.
   const plannedToday = Boolean(data?.next && data.plan) && sinceLast !== 0;
-  // Mount the cards once the data is there, so the entrance plays with real content.
-  const ready = data !== undefined || workout !== null;
+  // Mount the cards once the data is there, so the entrance plays with real content. A failed
+  // load must still show the cards (with fallbacks), so the user can always start a workout.
+  const ready = data !== undefined || workout !== null || !loading || error != null;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);

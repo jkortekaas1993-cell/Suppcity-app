@@ -172,7 +172,14 @@ export function Ring({
         <Glow
           color={fill}
           intensity={0.35}
-          style={{ position: 'absolute', left: -size * 0.3, top: -size * 0.3, width: size * 1.6, height: size * 1.6 }}
+          // Spread at most 16 px past the ring, so a card's padding holds it (no clipped edge).
+          style={{
+            position: 'absolute',
+            left: -Math.min(size * 0.3, 16),
+            top: -Math.min(size * 0.3, 16),
+            width: size + 2 * Math.min(size * 0.3, 16),
+            height: size + 2 * Math.min(size * 0.3, 16),
+          }}
         />
       ) : null}
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>

@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { formatMoney, type ProductSummary } from '@/lib/shopify';
-import { elevation, Glow, haptics, motion, Pill, PressableScale, radius, Text, useTheme } from '@/ui';
+import { Glow, haptics, motion, Pill, PressableScale, radius, Text, useTheme } from '@/ui';
 
 import { cartStore } from '../state/cartStore';
 import { AddButton } from './AddButton';
@@ -68,20 +68,15 @@ export function ProductTile({ product, bestseller = false }: { product: ProductS
         >
           {/* ≈ radial-gradient(70% 70% at 50% 40%, teal-tinted centre → bg1) from the mockup. */}
           <Glow intensity={0.1} style={{ position: 'absolute', left: '-20%', right: '-20%', top: '-30%', height: '140%' }} />
-          {/* Hairline top highlight (inset 0 1px 0 rgba(255,255,255,.05)). */}
+          {/* Hairline top highlight (colors.highlight). */}
           <View
             pointerEvents="none"
-            style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }}
+            style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 1, backgroundColor: colors.highlight }}
           />
           <Animated.View
             style={[
-              {
-                width: '84%',
-                // iOS drop shadow follows the packshot's alpha. No Android elevation: it would
-                // draw a box and lift the image above the "Bestseller" pill.
-                ...elevation.card,
-                elevation: 0,
-              },
+              // No shadow here: an alpha-following shadow on every grid tile renders offscreen on iOS.
+              { width: '84%' },
               liftStyle,
             ]}
           >
