@@ -7,7 +7,9 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_SHOPIFY_STORE_DOMAIN": "74e741-f9.myshopify.com",
         "EXPO_PUBLIC_SHOPIFY_STOREFRONT_TOKEN": "eda6355272aa3ce317efef3acda3dd3b",
@@ -15,14 +17,17 @@
         "EXPO_PUBLIC_SHOPIFY_SHOP_ID": "82703090012",
         "EXPO_PUBLIC_SUPABASE_URL": "https://btofgvfoalwufvkhttrt.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_CQHVOOjxQ2uiwjtROY0DHQ_FRshchTi"
-      }
+      },
+      "node": "22.14.0"
     },
     "production": {
       "extends": "preview",
       "distribution": "store",
       "channel": "production",
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" }
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   }
 }

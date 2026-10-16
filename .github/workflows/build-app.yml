@@ -51,9 +51,9 @@ jobs:
             exit 1
           fi
           node -e "
-            const b = require('./build.json');
-            for (const x of [].concat(b)) {
-              const url = 'https://expo.dev/accounts/' + x.project.ownerAccount.name + '/projects/' + x.project.slug + '/builds/' + x.id;
+            const b = [].concat(require('./build.json'));
+            for (const x of b) {
+              const url = 'https://expo.dev/accounts/suppcity-app/projects/suppcity-app/builds/' + x.id;
               console.log('::notice::Build started (' + x.platform + '): ' + url);
-              require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '- ' + x.platform + ': ' + url + '\n');
+              require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, '- ' + x.platform + ': ' + url + '\\n');
             }"
