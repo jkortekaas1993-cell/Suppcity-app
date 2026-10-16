@@ -43,8 +43,8 @@ jobs:
       - name: Apply database migrations
         run: |
           if ! supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all --yes > push.log 2>&1; then
-            # Surface the error (logs are not readable outside GitHub); strip anything secret-looking.
-            grep -v -i "password" push.log | tail -30 | while IFS= read -r l; do echo "::error::$l"; done
+            # GitHub masks secret values in logs and annotations automatically.
+            tail -30 push.log | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           fi
           cat push.log
