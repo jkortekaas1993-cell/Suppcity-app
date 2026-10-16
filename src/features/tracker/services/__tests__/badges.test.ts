@@ -1,7 +1,15 @@
 import type { Repositories } from '@/lib/db/repositories';
 import { createTestRepositories, nodeSqliteAvailable } from '@/lib/db/testing/nodeSqliteDb';
 
-import { badgesFromWorkout, loadWeeklyGoal, saveWeeklyGoal, syncBadges, WEEKLY_GOAL_KEY } from '../badges';
+import {
+  BADGE_CACHE_KEY,
+  badgesFromWorkout,
+  loadWeeklyGoal,
+  loadWeeklyGoalHistory,
+  saveWeeklyGoal,
+  syncBadges,
+  WEEKLY_GOAL_KEY,
+} from '../badges';
 
 const maybe = nodeSqliteAvailable ? describe : describe.skip;
 
@@ -72,5 +80,70 @@ maybe('badge storage and sync', () => {
     await repos.wipeLocalData();
     expect(await repos.badges.list()).toEqual([]);
     expect(await loadWeeklyGoal(repos.appState)).toBe(3);
+  });
+
+  it('only re-evaluates the history after training data or the goal changed (review M5)', async () => {
+    const { repos, tick } = await createTestRepositories();
+    let reads = 0;
+    const counted = { ...repos, dataPort: { ...repos.dataPort, exportRows: () => (reads++, repos.dataPort.exportRows()) } };
+    await logWorkout(repos, 'w1', '2026-10-01T10:00:00.000Z', [['bench-press-barbell', 60, 5]]);
+    await syncBadges(counted);
+    await syncBadges(counted);
+    await syncBadges(counted);
+    expect(reads).toBe(1);
+
+    await logWorkout(repos, 'w2', '2026-10-02T10:00:00.000Z', [['bench-press-barbell', 100, 1]]);
+    const after = await syncBadges(counted);
+    expect(reads).toBe(2);
+    expect(after.added.map((b) => b.id)).toContain('bench_100');
+
+    tick();
+    await repos.sets.update('w2-s0', { reps: 2 }); // an edit
+    await syncBadges(counted);
+    expect(reads).toBe(3);
+
+    await saveWeeklyGoal(repos.appState, 4, new Date('2026-10-14T12:00:00'));
+    await syncBadges(counted);
+    expect(reads).toBe(4);
+
+    await syncBadges(counted, { force: true });
+    expect(reads).toBe(5);
+    expect(await repos.appState.get(BADGE_CACHE_KEY)).not.toBeNull();
+  });
+
+  it('records the weekly goal per ISO week; changing it never rewrites past weeks (review L7)', async () => {
+    const { repos } = await createTestRepositories();
+    // Goal 2 (set before any of these weeks), 4 workouts-weeks of 2 trainings each.
+    await saveWeeklyGoal(repos.appState, 2, new Date('2026-09-01T12:00:00'));
+    const weeks = ['2026-09-07', '2026-09-14', '2026-09-21'];
+    for (const [i, d] of weeks.entries()) {
+      await logWorkout(repos, `a${i}`, `${d}T10:00:00`, [['squat-barbell', 50, 5]]);
+      await logWorkout(repos, `b${i}`, `${d.slice(0, 8)}${String(Number(d.slice(8)) + 1).padStart(2, '0')}T10:00:00`, [['squat-barbell', 50, 5]]);
+    }
+    // Week 4: the user raises the goal to 5 BEFORE finishing the week with 2 workouts.
+    await saveWeeklyGoal(repos.appState, 5, new Date('2026-09-28T08:00:00'));
+    await logWorkout(repos, 'a3', '2026-09-28T10:00:00', [['squat-barbell', 50, 5]]);
+    await logWorkout(repos, 'b3', '2026-09-29T10:00:00', [['squat-barbell', 50, 5]]);
+    const r1 = await syncBadges(repos);
+    // Week 4 counts against 5, so no streak yet; the 3 earlier weeks keep goal 2.
+    expect(r1.stored.map((b) => b.badge_id)).not.toContain('weekly_goal_4_weeks');
+
+    // Lowering the goal later must not make the old weeks count retroactively either.
+    await saveWeeklyGoal(repos.appState, 1, new Date('2026-10-12T08:00:00'));
+    const r2 = await syncBadges(repos);
+    expect(r2.stored.map((b) => b.badge_id)).not.toContain('weekly_goal_4_weeks');
+
+    const history = await loadWeeklyGoalHistory(repos.appState);
+    expect(history.map((h) => [h.key, h.goal])).toEqual([
+      ['', 3],
+      ['2026-W36', 2],
+      ['2026-W40', 5],
+      ['2026-W42', 1],
+    ]);
+    expect(history[2]?.from).toBe('2026-09-28');
+
+    // Changing twice in the same week keeps one entry for that week.
+    await saveWeeklyGoal(repos.appState, 3, new Date('2026-10-13T08:00:00'));
+    expect((await loadWeeklyGoalHistory(repos.appState)).map((h) => h.goal)).toEqual([3, 2, 5, 3]);
   });
 });

@@ -1,4 +1,15 @@
-import { BADGES, badgeViews, evaluateBadges, newlyEarned, type BadgeSetInput, type BadgeWorkoutInput } from '../badges';
+import {
+  BADGES,
+  badgeViews,
+  evaluateBadges,
+  goalForWeek,
+  newlyEarned,
+  parseGoalHistory,
+  recordGoalChange,
+  type BadgeSetInput,
+  type BadgeWorkoutInput,
+} from '../badges';
+import { weekIndex } from '../week';
 
 /** Local-time noon on a given date, so week boundaries never depend on the CI time zone. */
 function at(y: number, m: number, d: number, h = 12): string {
@@ -134,5 +145,36 @@ describe('newlyEarned / badgeViews', () => {
     expect(views).toHaveLength(BADGES.length);
     expect(views.filter((v) => v.earned).map((v) => v.id)).toEqual(['bench_100']);
     expect(views.find((v) => v.id === 'bench_100')).toMatchObject({ title: 'Honderd', sourceRef: 'w9' });
+  });
+});
+
+describe('weekly goal per week (no retroactive effect)', () => {
+  const change = (d: Date, goal: number) => ({ week: weekIndex(d), key: 'k', from: 'f', goal });
+
+  it('records changes from the current week on and looks up the goal per week', () => {
+    const w40 = new Date(2026, 8, 28, 12);
+    const h1 = recordGoalChange([], 3, change(w40, 5));
+    expect(h1.map((h) => [h.week, h.goal])).toEqual([
+      [0, 3],
+      [weekIndex(w40), 5],
+    ]);
+    expect(goalForWeek(h1, 5, weekIndex(w40) - 1)).toBe(3);
+    expect(goalForWeek(h1, 5, weekIndex(w40))).toBe(5);
+    expect(goalForWeek(h1, 5, weekIndex(w40) + 9)).toBe(5);
+    // A second change in the same week replaces it; going back to the old goal drops it.
+    expect(recordGoalChange(h1, 5, change(w40, 4)).map((h) => h.goal)).toEqual([3, 4]);
+    expect(recordGoalChange(h1, 5, change(w40, 3)).map((h) => h.goal)).toEqual([3]);
+    expect(parseGoalHistory([{ week: 5, key: 'x', from: 'y', goal: 9 }, { week: 'x' }, null])).toEqual([{ week: 5, key: 'x', from: 'y', goal: 5 }]);
+  });
+
+  it('a 4-week streak counts each week against the goal of that week', () => {
+    const two = (d: number, m = 9) => [workout(at(2026, m, d)), workout(at(2026, m, d + 2))];
+    const list = [...two(7), ...two(14), ...two(21), ...two(28)];
+    // Raised to 3 from the 4th week on: the 4th week (2 workouts) misses its goal.
+    const raised = recordGoalChange([], 2, change(new Date(2026, 8, 28, 12), 3));
+    expect(ids(evaluateBadges(list, { weeklyGoal: 3, goalHistory: raised }))).not.toContain('weekly_goal_4_weeks');
+    // Lowered to 1 only from October on: September weeks were already at 2 → streak counts.
+    const lowered = recordGoalChange([], 2, change(new Date(2026, 9, 5, 12), 1));
+    expect(ids(evaluateBadges(list, { weeklyGoal: 1, goalHistory: lowered }))).toContain('weekly_goal_4_weeks');
   });
 });

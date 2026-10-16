@@ -114,11 +114,72 @@ function isWorking(s: BadgeSetInput): boolean {
 }
 
 /**
- * Every badge earned by this history, each at the first workout that earned it.
- * `weeklyGoal` is the user's current weekly goal (1–5).
+ * A weekly-goal change: from week `week` (weekIndex, Monday-based ISO week, local) on,
+ * the goal is `goal`. `key` ("2026-W42") and `from` (Monday, YYYY-MM-DD) are for the
+ * CSV export. Week 0 means "since the start" (the goal before the first change).
  */
-export function evaluateBadges(workouts: readonly BadgeWorkoutInput[], opts: { weeklyGoal: number }): EarnedBadge[] {
-  const goal = clampWeeklyGoal(opts.weeklyGoal);
+export interface WeeklyGoalChange {
+  week: number;
+  key: string;
+  from: string;
+  goal: number;
+}
+
+/** Goal that applied in `week`: the last change at or before it (history sorted by week). */
+export function goalForWeek(history: readonly WeeklyGoalChange[], currentGoal: number, week: number): number {
+  let goal: number | null = null;
+  for (const h of history) {
+    if (h.week <= week) goal = h.goal;
+    else break;
+  }
+  return clampWeeklyGoal(goal ?? history[0]?.goal ?? currentGoal);
+}
+
+/**
+ * Records a goal change in week `at` (no retroactive effect): before the first change the
+ * previous goal is kept as "since the start"; a second change in the same week replaces it.
+ */
+export function recordGoalChange(
+  history: readonly WeeklyGoalChange[],
+  previousGoal: number,
+  change: WeeklyGoalChange,
+): WeeklyGoalChange[] {
+  const base: WeeklyGoalChange[] =
+    history.length > 0 ? [...history] : [{ week: 0, key: '', from: '', goal: clampWeeklyGoal(previousGoal) }];
+  const kept = base.filter((h) => h.week < change.week).sort((a, b) => a.week - b.week);
+  const before = kept[kept.length - 1];
+  if (before && before.goal === change.goal) return kept; // back to the goal that applied anyway
+  return [...kept, { ...change, goal: clampWeeklyGoal(change.goal) }];
+}
+
+/** Parses the stored history; drops anything malformed. */
+export function parseGoalHistory(raw: unknown): WeeklyGoalChange[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (h): h is WeeklyGoalChange =>
+        typeof h === 'object' &&
+        h !== null &&
+        Number.isInteger((h as WeeklyGoalChange).week) &&
+        typeof (h as WeeklyGoalChange).goal === 'number' &&
+        typeof (h as WeeklyGoalChange).key === 'string' &&
+        typeof (h as WeeklyGoalChange).from === 'string',
+    )
+    .map((h) => ({ week: h.week, key: h.key, from: h.from, goal: clampWeeklyGoal(h.goal) }))
+    .sort((a, b) => a.week - b.week);
+}
+
+/**
+ * Every badge earned by this history, each at the first workout that earned it.
+ * `weeklyGoal` is the user's current weekly goal (1–5); `goalHistory` (optional) the goal
+ * that applied per week, so changing the goal never rewrites past weeks.
+ */
+export function evaluateBadges(
+  workouts: readonly BadgeWorkoutInput[],
+  opts: { weeklyGoal: number; goalHistory?: readonly WeeklyGoalChange[] },
+): EarnedBadge[] {
+  const history = opts.goalHistory ?? [];
+  const goalOf = (week: number) => (history.length > 0 ? goalForWeek(history, opts.weeklyGoal, week) : clampWeeklyGoal(opts.weeklyGoal));
   const ordered = [...workouts]
     .filter((w) => Number.isFinite(Date.parse(w.startedAt)))
     .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt) || a.id.localeCompare(b.id));
@@ -167,10 +228,11 @@ export function evaluateBadges(workouts: readonly BadgeWorkoutInput[], opts: { w
 
     const inWeek = (perWeek.get(week) ?? 0) + 1;
     perWeek.set(week, inWeek);
-    if (inWeek === goal && !earned.has('weekly_goal_4_weeks')) {
-      // This workout completed the goal for `week`: count consecutive completed weeks ending here.
+    if (inWeek === goalOf(week) && !earned.has('weekly_goal_4_weeks')) {
+      // This workout completed the goal for `week`: count consecutive completed weeks ending
+      // here, each against the goal that applied in THAT week.
       let streak = 1;
-      while (streak < WEEK_STREAK && (perWeek.get(week - streak) ?? 0) >= goal) streak += 1;
+      while (streak < WEEK_STREAK && (perWeek.get(week - streak) ?? 0) >= goalOf(week - streak)) streak += 1;
       if (streak >= WEEK_STREAK) award('weekly_goal_4_weeks', w);
     }
   }

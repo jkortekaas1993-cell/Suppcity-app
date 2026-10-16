@@ -144,6 +144,12 @@ export interface BadgeRepository {
   list(): Promise<UserBadge[]>;
   /** Inserts badges that are not stored yet (by badge_id); returns the ids actually inserted. */
   addMany(rows: { badge_id: string; earned_at: IsoDateTime; source_ref: Uuid | null }[]): Promise<string[]>;
+  /**
+   * Cheap fingerprint of the training data badges are derived from (row count, latest and
+   * summed updated_at of workouts and sets, incl. soft-deleted). Changes on every new, edited,
+   * deleted, imported or synced workout/set.
+   */
+  trainingFingerprint(): Promise<string>;
 }
 
 /**

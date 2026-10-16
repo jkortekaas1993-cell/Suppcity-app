@@ -610,6 +610,16 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
       });
       return inserted;
     },
+    async trainingFingerprint() {
+      // MAX catches local writes; the sum of all updated_at also catches a synced row whose
+      // (remote) updated_at is older than the newest local one.
+      const r = await db.getFirstAsync<{ w: string; s: string }>(
+        `SELECT (SELECT COUNT(*) || ':' || IFNULL(MAX(updated_at), '') || ':' || TOTAL(julianday(updated_at)) FROM workouts) AS w,
+                (SELECT COUNT(*) || ':' || IFNULL(MAX(updated_at), '') || ':' || TOTAL(julianday(updated_at)) FROM sets) AS s`,
+        [],
+      );
+      return `${r?.w ?? ''}|${r?.s ?? ''}`;
+    },
   };
 
   // --- sync seam (Backend&Sync builds on this) ---------------------------------
