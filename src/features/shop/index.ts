@@ -1,5 +1,6 @@
 // Public API of the shop feature.
-export { ReorderCard } from './ReorderCard';
+export { ReorderCard, type ReorderCardProps } from './ReorderCard';
+export { pickMostUrgent, type ExternalReorderSignal, type ReorderPick } from './logic/reorderPick';
 export { ShopScreen } from './ShopScreen';
 export { CartScreen } from './screens/CartScreen';
 export { CollectionScreen } from './screens/CollectionScreen';

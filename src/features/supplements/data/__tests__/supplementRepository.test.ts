@@ -10,7 +10,7 @@ const maybe = nodeSqliteAvailable ? describe : describe.skip;
 
 async function setup() {
   const db = openNodeSqlite();
-  const version = await migrate(db, [...migrations, supplementsMigration]);
+  const version = await migrate(db, migrations);
   let n = 0;
   let t = Date.parse('2026-10-16T08:00:00.000Z');
   const repo = createSupplementRepository(db, { newId: () => `id-${++n}`, now: () => new Date(t).toISOString() });
@@ -24,7 +24,7 @@ describe('migration 4', () => {
       expect(supplementsMigration.sql).toContain(`CREATE TABLE IF NOT EXISTS ${t}`);
       expect((TRACKER_TABLES as readonly string[]).includes(t)).toBe(false);
     }
-    expect(migrations.some((m) => m.version === 4)).toBe(false); // registered by the integrator after migration 3
+    expect(migrations.find((m) => m.version === 4)).toBe(supplementsMigration); // registered right after migration 3
   });
 });
 

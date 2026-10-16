@@ -22,7 +22,15 @@ Local: `src/lib/db/schema.ts` (SQLite). Server: `supabase/migrations/*.sql` (Pos
 | consents | – | ✓ | Append-only grant/revoke log via RPC `set_consent(type, granted, policy_version)`; `policy_version` = `POLICY_VERSION` in `src/lib/config/constants.ts`; `current_consents` view. |
 | points_ledger | – | ✓ | Append-only, service role writes; `points_balance` view. |
 | stock_items | later local | ✓ | Supply counter → reorder reminders (currently device-local KV in the shop feature). |
-| app_state | ✓ (local only) | – | Active-workout snapshot, rest prefs, sync cursors (`sync:<user>:<push|pull>:<table>`), queued workout-point claims. Never synced; wiped on account deletion. |
+| app_state | ✓ (local only) | – | Active-workout snapshot, rest prefs, sync cursors (`sync:<user>:<push|pull>:<table>`), queued workout-point claims, `tracker.weeklyGoal`, `supplements.*` settings (below). Never synced; wiped on sign-out and account deletion. |
+| user_badges | ✓ (local only, migration 3) | – | Milestones (Mijlpalen): `badge_id`, `earned_at`, `source_ref`; one live row per badge (partial unique index). Derived from training data, so never used for points, discounts, marketing or segmentation (hard rules 1 and 5). Not in `TRACKER_TABLES`; wiped with tracker data. |
+| app_state `tracker.weeklyGoal` | ✓ (local only) | – | Weekly training goal (3–7) for the weekly segments on Vandaag. No daily streak. |
+| supplements | ✓ (local only, migration 4) | – | User's own supplement: `name`, `dose_text` (user's text, shown as-is), optional `shopify_variant_gid` (for reorder), stock `units_per_pack` / `units_left` (servings). |
+| supplement_schedules | ✓ (local only, migration 4) | – | `days_mask` (bit 0 = Monday), `mode` fixed / training / rest, `time_local` `HH:MM`. |
+| supplement_intakes | ✓ (local only, migration 4) | – | Tick-off log: `scheduled_for` (local `YYYY-MM-DDTHH:MM`), `status` taken / skipped, `taken_at`. Health data (hard rule 1): never synced, never leaves the device except in the user's own CSV export. |
+| app_state `supplements.reminders` | ✓ (local only) | – | Separate, withdrawable choice for supplement reminders: `{ enabled, decidedAt }` (timestamped). Withdrawing cancels all pending reminders. Also `supplements.lastPlan` (count of scheduled/dropped reminders). |
+
+The supplement tables are not in `TRACKER_TABLES` and have no Supabase counterpart. The only thing that leaves the supplements feature is `getSupplementStockForReorder()` → the shop's ReorderCard on Vandaag: variant gid, the user's name for it and days left, nothing about intakes or times. On sign-out and account deletion `wipeSupplementsLocal()` deletes the three tables, the `supplements.*` settings and every scheduled reminder (`wipeAllLocalData` in `src/integration`).
 
 ## RLS
 Enabled on every table. Owner policies use `user_id = (select auth.uid())`. `consents` is insert+select only, `points_ledger` select only, `profiles` select+update (no client insert; `shopify_customer_id` protected by trigger). `anon` has no table access.
@@ -36,4 +44,4 @@ Enabled on every table. Owner policies use `user_id = (select auth.uid())`. `con
 | Deleted account | Immediate cascade delete; backups roll off within Supabase's backup window |
 
 ## Export
-CSV export of workouts+sets (Tracker builder, `Trainen → Data` and `Ik → Gegevens exporteren`), Hevy-compatible columns. Exported as a real `.csv` file via expo-file-system + expo-sharing; import from a picked file (expo-document-picker) or pasted text.
+CSV export of workouts+sets (Tracker builder, `Trainen → Data` and `Ik → Data exporteren`), Hevy-compatible columns. The same Data screen exports the supplement schedule (`suppcity-supplementen.csv`) and the intake log (`suppcity-supplement-innames.csv`) via `exportSupplementsCsv()`. Exported as a real `.csv` file via expo-file-system + expo-sharing; import from a picked file (expo-document-picker) or pasted text.

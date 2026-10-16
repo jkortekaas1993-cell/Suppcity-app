@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { useRepositories } from '@/lib/db';
 import { Button, Card, EmptyState, ListRow, Pill, Screen, SectionLabel, Text } from '@/ui';
@@ -15,7 +15,12 @@ import { loadRecords } from './screens/PrListScreen';
  * Trainen tab: routines, history and PRs.
  * HARD RULE: 100% free of ads, products and the shop. Do not import shop/points here.
  */
-export function TrainenScreen() {
+export interface TrainenScreenProps {
+  /** Entry card to Voortgang (progress feature), composed by the route file. */
+  progressCard?: ReactNode;
+}
+
+export function TrainenScreen({ progressCard }: TrainenScreenProps = {}) {
   const repos = useRepositories();
   const router = useRouter();
   const workout = useActiveWorkout();
@@ -58,6 +63,8 @@ export function TrainenScreen() {
       ) : (
         <Button label="Lege training starten" icon="play" size="lg" fullWidth loading={starting} onPress={() => void startEmpty()} />
       )}
+
+      {progressCard ?? null}
 
       <SectionLabel label="Routines" action={{ label: "Schema's", onPress: () => router.push('/routine/schemas'), accessibilityLabel: "Kant-en-klare schema's" }} />
       {data && routines.length === 0 ? (

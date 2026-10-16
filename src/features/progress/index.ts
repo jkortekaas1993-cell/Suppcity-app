@@ -2,6 +2,7 @@
 // Read-only on the tracker's local SQLite data; nothing is sent off the device (hard rule 1).
 export { ProgressScreen } from './screens/ProgressScreen';
 export { ProgressEntryCard } from './ProgressEntryCard';
+export { WeekVolumeTile } from './WeekVolumeTile';
 export { useWeekSummary } from './useWeekSummary';
 export type { ProgressQuery } from './data/useProgressQuery';
 export type { MuscleSetCount, WeekStats, WeekSummary } from './logic/week';

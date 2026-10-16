@@ -21,6 +21,11 @@ export interface VandaagScreenProps {
   smartCard?: ReactNode;
   /** Optional supplement-reminder card (supplements feature), shown above the smart card. */
   supplementCard?: ReactNode;
+  /**
+   * "Volume week" tile from the progress feature (same numbers as Voortgang). When absent
+   * the tracker's own week-volume tile is shown.
+   */
+  weekVolumeTile?: ReactNode;
 }
 
 const RECENT_WORKOUTS = 60;
@@ -30,7 +35,7 @@ const HERO_NAMES = 3;
  * Vandaag tab: weekly goal, the next workout as the hero with one big start button,
  * two stat tiles, then the slots for cards from other features.
  */
-export function VandaagScreen({ smartCard, supplementCard }: VandaagScreenProps) {
+export function VandaagScreen({ smartCard, supplementCard, weekVolumeTile }: VandaagScreenProps) {
   const repos = useRepositories();
   const router = useRouter();
   const workout = useActiveWorkout();
@@ -204,21 +209,23 @@ export function VandaagScreen({ smartCard, supplementCard }: VandaagScreenProps)
       )}
 
       <View style={{ flexDirection: 'row', gap: space.md }}>
-        <StatTile
-          size="lg"
-          label="Volume week"
-          value={formatTonnes(volume.thisWeekKg)}
-          unit="ton"
-          delta={
-            volume.changePct !== null
-              ? {
-                  label: `${formatSignedPct(volume.changePct)} t.o.v. vorige week`,
-                  direction: volume.changePct > 0 ? 'up' : volume.changePct < 0 ? 'down' : 'flat',
-                }
-              : undefined
-          }
-          caption={volume.changePct === null ? 'deze week' : undefined}
-        />
+        {weekVolumeTile ?? (
+          <StatTile
+            size="lg"
+            label="Volume week"
+            value={formatTonnes(volume.thisWeekKg)}
+            unit="ton"
+            delta={
+              volume.changePct !== null
+                ? {
+                    label: `${formatSignedPct(volume.changePct)} t.o.v. vorige week`,
+                    direction: volume.changePct > 0 ? 'up' : volume.changePct < 0 ? 'down' : 'flat',
+                  }
+                : undefined
+            }
+            caption={volume.changePct === null ? 'deze week' : undefined}
+          />
+        )}
         <StatTile size="lg" label="Deze maand" value={String(thisMonth)} unit={thisMonth === 1 ? 'training' : 'trainingen'} />
       </View>
 

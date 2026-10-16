@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Fragment, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Alert, View } from 'react-native';
 
 import { formatDateNl, Notice, useAsync } from '@/features/shop';
@@ -26,6 +26,13 @@ export interface IkScreenProps {
   workoutCount?: number | null;
   /** Route of the supplement schedule (built by another builder). */
   supplementsHref?: Href;
+  /**
+   * The supplements feature's own row (SupplementsLink), composed by the route file.
+   * Replaces the plain "Mijn supplementen" row. The supplement schedule also shows the
+   * stock, so Ik has no separate "Voorraadteller" row any more (the route stays, reachable
+   * from the ReorderCard, the cart and order details).
+   */
+  supplementsRow?: (props: { divider: boolean }) => ReactNode;
 }
 
 /** Ik tab (mockup Mijlpalen.dc.html): profile header, points, milestones, list rows, account deletion. */
@@ -36,6 +43,7 @@ export function IkScreen({
   memberSince,
   workoutCount,
   supplementsHref = '/supplements',
+  supplementsRow,
 }: IkScreenProps) {
   const { colors, space } = useTheme();
   const session = useCustomerSession();
@@ -85,14 +93,13 @@ export function IkScreen({
     workoutCount: workoutCount ?? null,
   });
 
-  const rows: { title: string; subtitle?: string; href: Href; show: boolean }[] = [
-    { title: 'Mijn supplementen', href: supplementsHref, show: true },
-    { title: 'Voorraadteller', subtitle: 'Herinnering voordat je pot leeg is', href: '/shop/stock', show: true },
+  const rows: { title: string; subtitle?: string; href: Href; show: boolean; render?: (p: { divider: boolean }) => ReactNode }[] = [
+    { title: 'Mijn supplementen', href: supplementsHref, show: true, render: supplementsRow },
     { title: 'Bestellingen', href: '/account/orders', show: signedIn },
     { title: 'PT-code koppelen', href: '/account/pt-code', show: signedIn },
     { title: 'Privacy en toestemmingen', href: '/account/privacy', show: true },
     // CSV export + import is the tracker's Data screen (hard rule 9).
-    { title: 'Data exporteren', subtitle: 'CSV van al je trainingen', href: '/workout/data', show: true },
+    { title: 'Data exporteren', subtitle: 'CSV van je trainingen en supplementen', href: '/workout/data', show: true },
   ];
   const visible = rows.filter((r) => r.show);
 
@@ -158,15 +165,19 @@ export function IkScreen({
       {badgesSlot ?? null}
 
       <Card padding={0} gap={0}>
-        {visible.map((r, i) => (
-          <ListRow
-            key={r.title}
-            title={r.title}
-            subtitle={r.subtitle}
-            divider={i < visible.length - 1}
-            onPress={() => router.push(r.href)}
-          />
-        ))}
+        {visible.map((r, i) =>
+          r.render ? (
+            <Fragment key={r.title}>{r.render({ divider: i < visible.length - 1 })}</Fragment>
+          ) : (
+            <ListRow
+              key={r.title}
+              title={r.title}
+              subtitle={r.subtitle}
+              divider={i < visible.length - 1}
+              onPress={() => router.push(r.href)}
+            />
+          ),
+        )}
       </Card>
 
       {signedIn ? (

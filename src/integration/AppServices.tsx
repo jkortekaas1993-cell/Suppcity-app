@@ -2,6 +2,7 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 
 import { registerAccountServices } from '@/features/account';
 import { createPointsService } from '@/features/points';
+import { initSupplementReminders, wipeSupplementsLocal } from '@/features/supplements';
 import { ActiveWorkoutProvider } from '@/features/tracker';
 import { useRepositories, type Repositories } from '@/lib/db';
 import { CustomSyncEngine, createSupabaseSyncAdapter, type CursorStore, type RemoteSyncAdapter, type SyncEngine } from '@/lib/db/sync';
@@ -18,7 +19,7 @@ import {
   signInWithShopifyToken,
 } from '@/lib/supabase';
 
-import { finalSyncThenWipe } from './signOutFlow';
+import { finalSyncThenWipe, wipeAllLocalData } from './signOutFlow';
 import { queueWorkoutForPoints, syncThenClaim, type WorkoutPointsDeps } from './workoutPoints';
 
 /**
@@ -27,7 +28,9 @@ import { queueWorkoutForPoints, syncThenClaim, type WorkoutPointsDeps } from './
  *  - account services: ConsentService, PtCodeService (src/lib/supabase) and the
  *    login / account-deletion lifecycle;
  *  - sync: CustomSyncEngine over the tracker's SQLite SyncSource and Supabase;
- *  - points: a finished workout is synced first, then `award_workout_points`.
+ *  - points: a finished workout is synced first, then `award_workout_points`;
+ *  - supplements (local only): reminders start after the migrations, and the local
+ *    supplement data is wiped together with the tracker data.
  */
 
 const PENDING_POINTS_KEY = 'points.pendingWorkouts';
@@ -56,6 +59,7 @@ async function safeUserId(): Promise<string | null> {
 }
 
 export function createAppServices(repos: Repositories): { engine: SyncEngine; points: WorkoutPointsDeps } {
+  const wipeLocal = () => wipeAllLocalData({ wipeTracker: () => repos.wipeLocalData(), wipeSupplements: () => wipeSupplementsLocal() });
   const engine = new CustomSyncEngine({
     local: repos.sync,
     remote: lazyRemote(),
@@ -91,7 +95,7 @@ export function createAppServices(repos: Repositories): { engine: SyncEngine; po
         await syncThenClaim(points);
       },
       async onAccountDeleted() {
-        await repos.wipeLocalData(); // also drops sync cursors and pending point claims
+        await wipeLocal(); // tracker + supplements; also drops sync cursors and pending point claims
       },
       async onSigningOut({ force }) {
         // Last push while the Supabase session still exists, then the same wipe as
@@ -100,7 +104,7 @@ export function createAppServices(repos: Repositories): { engine: SyncEngine; po
           {
             hasBackendSession: async () => (await safeUserId()) !== null,
             syncNow: () => engine.syncNow(),
-            wipeLocalData: () => repos.wipeLocalData(),
+            wipeLocalData: wipeLocal,
           },
           { force },
         );
@@ -120,6 +124,20 @@ export function AppServices({ children }: { children: ReactNode }) {
   useEffect(() => {
     void syncThenClaim(services.points).catch(() => undefined);
   }, [services]);
+
+  // Supplement reminders: <DatabaseProvider> has migrated before this mounts.
+  useEffect(() => {
+    let cleanup: (() => void) | null = null;
+    let active = true;
+    void initSupplementReminders().then((c) => {
+      if (active) cleanup = c;
+      else c();
+    });
+    return () => {
+      active = false;
+      cleanup?.();
+    };
+  }, []);
 
   // M8: Supabase ended the session by itself (refresh token expired/revoked) while the
   // shop login is still valid → new exchange with a valid Shopify token, else a calm

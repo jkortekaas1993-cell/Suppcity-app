@@ -1,4 +1,4 @@
-import { finalSyncThenWipe, type SignOutDeps } from '../signOutFlow';
+import { finalSyncThenWipe, wipeAllLocalData, type SignOutDeps } from '../signOutFlow';
 
 function deps(opts: { session?: boolean; syncOk?: boolean; hang?: boolean } = {}) {
   const calls: string[] = [];
@@ -41,5 +41,28 @@ describe('sign-out: final sync, then wipe local data (H1)', () => {
     expect(await finalSyncThenWipe(t.d)).toEqual({ status: 'unsynced' });
     expect(t.calls).toEqual([]);
     expect(await finalSyncThenWipe(t.d, { force: true })).toEqual({ status: 'wiped', synced: false });
+  });
+});
+
+describe('wipeAllLocalData: tracker and local supplements together', () => {
+  it('wipes supplements first, then tracker data', async () => {
+    const calls: string[] = [];
+    await wipeAllLocalData({
+      wipeSupplements: async () => void calls.push('supplements'),
+      wipeTracker: async () => void calls.push('tracker'),
+    });
+    expect(calls).toEqual(['supplements', 'tracker']);
+  });
+
+  it('still wipes tracker data when the supplement wipe fails, then reports the error', async () => {
+    const calls: string[] = [];
+    const err = await wipeAllLocalData({
+      wipeSupplements: async () => {
+        throw new Error('boom');
+      },
+      wipeTracker: async () => void calls.push('tracker'),
+    }).catch((e: unknown) => e);
+    expect((err as Error).message).toBe('boom');
+    expect(calls).toEqual(['tracker']);
   });
 });

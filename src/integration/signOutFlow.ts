@@ -34,6 +34,23 @@ export async function finalSyncThenWipe(deps: SignOutDeps, opts: { force?: boole
   return { status: 'wiped', synced };
 }
 
+/**
+ * Everything on this device that belongs to the signed-in person: the local-only supplement
+ * schedule incl. its reminders, then tracker data and app_state (cursors, pending claims).
+ * Sequential (two SQLite connections must not write at once); the tracker wipe still runs
+ * when the supplement wipe fails, and the first error is rethrown.
+ */
+export async function wipeAllLocalData(deps: { wipeTracker(): Promise<void>; wipeSupplements(): Promise<void> }): Promise<void> {
+  let error: unknown = null;
+  try {
+    await deps.wipeSupplements();
+  } catch (e) {
+    error = e;
+  }
+  await deps.wipeTracker();
+  if (error) throw error;
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('timeout')), ms);

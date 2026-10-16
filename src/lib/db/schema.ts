@@ -13,6 +13,8 @@
  *   use a UUID. So `exercise_id` is "slug or uuid", same as on the server.
  */
 
+import { supplementsMigration } from './migrations/0004_supplements';
+
 export interface Migration {
   version: number;
   name: string;
@@ -131,6 +133,8 @@ CREATE TABLE IF NOT EXISTS user_badges (
 CREATE UNIQUE INDEX IF NOT EXISTS user_badges_badge_uq ON user_badges(badge_id) WHERE deleted_at IS NULL;
 `,
   },
+  // 4: supplement schedule. LOCAL ONLY (health data, hard rule 1); see the file header.
+  supplementsMigration,
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1]?.version ?? 0;

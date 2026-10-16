@@ -17,10 +17,21 @@ import { exportAllCsv, importWorkoutCsv, type ImportSummary } from '../services/
  * expo-sharing; plain-text share as fallback). Import reads a picked file
  * (expo-document-picker) or pasted CSV text.
  */
-export function DataScreen() {
+/** A CSV export from another feature (e.g. the supplement schedule), composed by the route file. */
+export interface ExtraCsvExport {
+  title: string;
+  body: string;
+  load: () => Promise<{ fileName: string; csv: string }[]>;
+}
+
+export interface DataScreenProps {
+  extraExports?: ExtraCsvExport[];
+}
+
+export function DataScreen({ extraExports = [] }: DataScreenProps = {}) {
   const repos = useRepositories();
   const [csv, setCsv] = useState('');
-  const [busy, setBusy] = useState<'import' | 'export' | null>(null);
+  const [busy, setBusy] = useState<'import' | 'export' | `extra-${number}` | null>(null);
   const [result, setResult] = useState<ImportSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +41,19 @@ export function DataScreen() {
       const out = await exportAllCsv(repos);
       const shared = await shareCsvFile(out.csv).catch(() => false);
       if (!shared) await Share.share({ title: 'suppcity-trainingen.csv', message: out.csv });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doExtraExport = async (index: number, extra: ExtraCsvExport) => {
+    setBusy(`extra-${index}`);
+    try {
+      // One share sheet per file, one after the other.
+      for (const file of await extra.load()) {
+        const shared = await shareCsvFile(file.csv, file.fileName).catch(() => false);
+        if (!shared) await Share.share({ title: file.fileName, message: file.csv });
+      }
     } finally {
       setBusy(null);
     }
@@ -55,6 +79,19 @@ export function DataScreen() {
         <Text>Al je trainingen en sets als CSV. Kolommen zijn gelijk aan een Hevy-export.</Text>
         <Button label="Exporteer als CSV" icon="share" loading={busy === 'export'} onPress={() => void doExport()} />
       </Card>
+
+      {extraExports.map((extra, i) => (
+        <Card key={extra.title} eyebrow={extra.title}>
+          <Text>{extra.body}</Text>
+          <Button
+            label="Exporteer als CSV"
+            variant="secondary"
+            icon="share"
+            loading={busy === `extra-${i}`}
+            onPress={() => void doExtraExport(i, extra)}
+          />
+        </Card>
+      ))}
 
       <Card eyebrow="Importeren uit Hevy of Strong">
         <Text tone="secondary">
