@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { Icon, SectionLabel, Segmented, Text, useTheme } from '@/ui';
+import { Appear, Icon, SectionLabel, Segmented, Text, useTheme } from '@/ui';
 
 import { useBadges } from '../hooks/useBadges';
 import type { BadgeDefinition, BadgeView } from '../logic/badges';
@@ -70,7 +70,7 @@ export function BadgesSection({ title = 'Mijlpalen', testID }: BadgesSectionProp
     <View testID={testID} style={{ gap: space.md }}>
       <SectionLabel label={`${title} · ${earnedCount} van ${total}`} />
       {rows.map((row, i) => (
-        <View key={i} style={{ flexDirection: 'row', gap: space.sm + 2 }}>
+        <Appear key={i} index={i} style={{ flexDirection: 'row', gap: space.sm + 2 }}>
           {row.map((b) => (
             <View
               key={b.id}
@@ -92,7 +92,7 @@ export function BadgesSection({ title = 'Mijlpalen', testID }: BadgesSectionProp
           {Array.from({ length: PER_ROW - row.length }, (_, j) => (
             <View key={`pad-${j}`} style={{ flex: 1 }} />
           ))}
-        </View>
+        </Appear>
       ))}
     </View>
   );

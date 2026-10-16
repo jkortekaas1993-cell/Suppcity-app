@@ -1,9 +1,27 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Share, View } from 'react-native';
+import { Alert, ScrollView, Share, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRepositories, type Exercise, type WorkoutSet } from '@/lib/db';
-import { Button, Card, haptics, Icon, IconButton, ListRow, Pill, SectionLabel, StatTile, Text, useTheme } from '@/ui';
+import {
+  BrandMark,
+  Button,
+  Card,
+  CountUp,
+  Glow,
+  haptics,
+  Icon,
+  IconButton,
+  ListRow,
+  Pill,
+  SectionLabel,
+  Skyline,
+  StatTile,
+  Text,
+  useTheme,
+} from '@/ui';
 
 import { BadgeMedal } from '../components/BadgesSection';
 import { NotificationOptInCard } from '../components/NotificationOptInCard';
@@ -45,7 +63,7 @@ function shareMessage(title: string, pr: ReportPr | null, volumeKg: number, sets
 
 /** The gold PR card from PR.dc.html: big number, reps and estimated 1RM, Supp City mark. */
 function PrCard({ pr }: { pr: ReportPr }) {
-  const { colors, radius, space } = useTheme();
+  const { space } = useTheme();
   const isVolume = pr.kind === 'best_volume';
   const isReps = pr.kind === 'most_reps_at_weight';
   const big = isVolume ? formatNumberNl(pr.value, 0) : isReps ? String(pr.value) : formatNumberNl(pr.kind === 'best_e1rm' ? pr.weightKg : pr.value, 2);
@@ -82,20 +100,7 @@ function PrCard({ pr }: { pr: ReportPr }) {
         {line} · <Text tone="success" tnum variant="bodyStrong" style={{ fontSize: 14 }}>{deltaText}</Text>
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs + 2 }}>
-        <View
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: radius.xs + 1,
-            backgroundColor: colors.accent,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text variant="micro" tone="onAccent" style={{ fontSize: 11, lineHeight: 13 }}>
-            SC
-          </Text>
-        </View>
+        <BrandMark size={22} />
         <Text variant="eyebrow" tone="tertiary" style={{ fontSize: 12 }}>
           Supp City
         </Text>
@@ -121,12 +126,149 @@ function BadgeUnlockedRow({ badge }: { badge: BadgeDefinition }) {
   );
 }
 
+/** What the big number on the PR moment shows, and where it counts up from. */
+function prNumber(pr: ReportPr): { from: number; to: number; unit: string; spokenUnit: string; format: (v: number) => string } {
+  const isReps = pr.kind === 'most_reps_at_weight';
+  const isVolume = pr.kind === 'best_volume';
+  // e1RM records show the lifted weight; counting from the previous e1RM would mislead.
+  const to = pr.kind === 'best_e1rm' ? pr.weightKg : pr.value;
+  const from = pr.kind !== 'best_e1rm' && pr.previous > 0 && pr.previous < to ? pr.previous : to;
+  const near = (v: number) => Math.abs(v - to) < 1e-6;
+  const format = isReps || isVolume
+    ? (v: number) => formatNumberNl(near(v) ? to : Math.round(v), 0)
+    : // kg: show plate-sized steps while counting, the exact value at the end.
+      (v: number) => formatNumberNl(near(v) ? to : Math.round(v * 2) / 2, 2);
+  return { from, to, unit: isReps ? 'reps' : 'kg', spokenUnit: isReps ? 'herhalingen' : 'kilo', format };
+}
+
+/**
+ * The PR moment (design round 3, PR.dc.html): gold glow, the skyline lighting up from left to
+ * right over a faint static one, and the number counting up from the previous record. Only your
+ * own performance: no chance mechanics. Static with "reduce motion" (in the primitives).
+ */
+function PrMoment({ pr }: { pr: ReportPr }) {
+  const { space } = useTheme();
+  const n = prNumber(pr);
+  const isReps = pr.kind === 'most_reps_at_weight';
+  const isVolume = pr.kind === 'best_volume';
+  const e = epley1rm(pr.weightKg, pr.reps);
+  const delta = pr.value - pr.previous;
+  const deltaText = isReps ? `+${delta} reps` : `+${formatNumberNl(delta, isVolume ? 0 : 1)} kg`;
+  let line: string;
+  if (isVolume) line = 'meeste volume in één training';
+  else if (isReps) line = `op ${formatKg(pr.weightKg)}`;
+  else line = `× ${pr.reps} rep${pr.reps === 1 ? '' : 's'}${e !== null && pr.reps > 1 ? ` · geschat 1RM ${formatNumberNl(e, 0)} kg` : ''}`;
+  const versus = pr.kind === 'best_e1rm' ? 'op je geschat 1RM' : 'op je vorige record';
+
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Nieuw persoonlijk record. ${pr.exerciseName}: ${n.format(n.to)} ${n.spokenUnit}, ${line}, ${deltaText} ${versus}`}
+      style={{ alignItems: 'center', gap: space.sm + 2, paddingTop: space.xxxl, paddingBottom: space.xl }}
+    >
+      <Pill label="Nieuw record" tone="gold" size="md" icon="star" />
+      <Text variant="title" tone="secondary" align="center" style={{ fontSize: 22, lineHeight: 26, marginTop: space.sm }}>
+        {pr.exerciseName}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm - 2, alignSelf: 'stretch', justifyContent: 'center' }}>
+        <CountUp
+          from={n.from}
+          to={n.to}
+          format={n.format}
+          delay={200}
+          variant="hero"
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={1.1}
+          style={{ fontSize: 120, lineHeight: 112, letterSpacing: -1, flexShrink: 1 }}
+        />
+        <Text variant="title" tone="secondary" style={{ fontSize: 40, lineHeight: 44, textTransform: 'none' }}>
+          {n.unit}
+        </Text>
+      </View>
+      <Text tone="secondary" tnum align="center" style={{ fontSize: 15 }}>
+        {line} · <Text tone="success" tnum variant="bodyStrong" style={{ fontSize: 15 }}>{deltaText}</Text> {versus}
+      </Text>
+    </View>
+  );
+}
+
+/** Same moment without a record: the workout itself is the headline. */
+function DoneMoment({ title }: { title: string }) {
+  const { space } = useTheme();
+  return (
+    <View style={{ alignItems: 'center', gap: space.sm + 2, paddingTop: space.xxxl, paddingBottom: space.xl }}>
+      <Pill label="Workout voltooid" tone="accent" size="md" icon="check" />
+      <Text variant="display" align="center" accessibilityRole="header" style={{ fontSize: 56, lineHeight: 58, marginTop: space.sm }}>
+        Sterk gedaan
+      </Text>
+      <Text variant="title" tone="secondary" align="center" style={{ fontSize: 22, lineHeight: 26 }} numberOfLines={2}>
+        {title}
+      </Text>
+    </View>
+  );
+}
+
+/** Duur · Volume · Records (or Sets) in one row, divided by hairlines. */
+function FinishStats({ durationMs, volumeKg, sets, records }: { durationMs: number; volumeKg: number; sets: number; records: number }) {
+  const { colors, radius, space } = useTheme();
+  const cells: { value: string; label: string; spoken: string }[] = [
+    { value: formatElapsed(durationMs), label: 'Duur', spoken: `Duur ${formatElapsed(durationMs)}` },
+    { value: formatNumberNl(volumeKg, 0), label: 'Volume kg', spoken: `${formatNumberNl(volumeKg, 0)} kilo volume` },
+    records > 0
+      ? { value: String(records), label: records === 1 ? 'Record' : 'Records', spoken: `${records} ${records === 1 ? 'record' : 'records'}` }
+      : { value: String(sets), label: 'Sets', spoken: `${sets} sets` },
+  ];
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        paddingVertical: space.md + 2,
+        paddingHorizontal: space.xs + 2,
+        borderRadius: radius.lg + 2,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.bg1,
+      }}
+    >
+      {cells.map((c, i) => (
+        <View
+          key={c.label}
+          accessible
+          accessibilityLabel={c.spoken}
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            gap: space.xxs,
+            borderLeftWidth: i === 0 ? 0 : 1,
+            borderLeftColor: colors.border,
+          }}
+        >
+          <Text variant="metric" style={{ fontSize: 22, lineHeight: 26 }} numberOfLines={1} adjustsFontSizeToFit>
+            {c.value}
+          </Text>
+          <Text variant="micro" tone="tertiary">
+            {c.label}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function weekLine(week: { done: number; goal: number; reached: boolean }): string {
+  const base = week.done > week.goal ? `Training ${week.done} deze week` : `Training ${week.done} van ${week.goal} deze week`;
+  if (week.reached) return `${base} — weekdoel gehaald`;
+  if (week.goal - week.done === 1) return `${base} — weekdoel bijna binnen`;
+  return base;
+}
+
 /** Detail of a finished workout; with ?klaar=1 it is the finish summary / PR moment. */
 export function WorkoutDetailScreen() {
   const { id, klaar } = useLocalSearchParams<{ id: string; klaar?: string }>();
   const repos = useRepositories();
   const router = useRouter();
-  const { colors, space } = useTheme();
+  const { colors, layout, space } = useTheme();
   const justFinished = klaar === '1';
 
   const load = useCallback(async () => {
@@ -218,53 +360,11 @@ export function WorkoutDetailScreen() {
     );
   };
 
-  return (
-    <StackScreen
-      eyebrow={justFinished ? 'Workout voltooid' : formatDateNl(workout.started_at)}
-      title={justFinished ? 'Sterk gedaan' : workout.title}
-      subtitle={justFinished ? workout.title : undefined}
-      hideBack={justFinished}
-      right={
-        justFinished ? undefined : (
-          <IconButton icon="trash" accessibilityLabel="Training verwijderen" onPress={remove} color={colors.text2} />
-        )
-      }
-      footer={
-        justFinished ? (
-          <>
-            <Button label={headline ? 'Deel je PR-kaart' : 'Deel je training'} icon="share" size="lg" fullWidth onPress={share} />
-            <Button label="Terug naar Vandaag" variant="secondary" fullWidth onPress={() => router.replace('/vandaag')} />
-          </>
-        ) : undefined
-      }
-    >
-      {report ? (
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <StatTile size="sm" value={formatElapsed(report.summary.durationMs)} caption="duur" />
-          <StatTile size="sm" value={formatNumberNl(report.summary.volumeKg, 0)} caption="kg volume" />
-          <StatTile size="sm" value={String(report.summary.completedSets)} caption="sets" />
-        </View>
-      ) : null}
-
-      {headline ? <PrCard pr={headline} /> : null}
-
+  const details = (
+    <>
       {badges.map((b) => (
         <BadgeUnlockedRow key={b.id} badge={b} />
       ))}
-
-      {week ? (
-        <Card accessible accessibilityLabel={`Weekdoel: ${week.done} van ${week.goal} trainingen`}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text tone="secondary" style={{ fontSize: 14 }}>
-              Weekdoel
-            </Text>
-            <Text variant="bodyStrong" tone={week.reached ? 'success' : 'default'} tnum style={{ fontSize: 14 }}>
-              {week.done} van {week.goal}
-              {week.reached ? ' · gehaald' : ''}
-            </Text>
-          </View>
-        </Card>
-      ) : null}
 
       {offerNotifications ? <NotificationOptInCard onDone={() => setOfferNotifications(false)} /> : null}
 
@@ -319,6 +419,121 @@ export function WorkoutDetailScreen() {
           </Card>
         );
       })}
+    </>
+  );
+
+  if (justFinished) {
+    // The finish summary / PR moment (PR.dc.html). Gold light only for a real record.
+    const glowColor = headline ? colors.gold : colors.accent;
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg0 }}>
+        <ScrollView
+          indicatorStyle="white"
+          contentContainerStyle={{ paddingHorizontal: layout.screenPadding, gap: layout.screenGap, paddingBottom: space.xxl }}
+        >
+          <View>
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', left: -layout.screenPadding, right: -layout.screenPadding, top: 0, height: 420 }}
+            >
+              <Glow
+                color={glowColor}
+                intensity={headline ? 0.2 : 0.16}
+                style={{ position: 'absolute', left: -120, right: -120, top: -20, height: 480 }}
+              />
+              <View style={{ position: 'absolute', left: 0, right: 0, top: 150, height: 200, overflow: 'hidden' }}>
+                <Skyline opacity={0.18} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%' }} />
+                <Skyline
+                  reveal="sweep"
+                  delay={300}
+                  duration={1200}
+                  opacity={0.55}
+                  style={{ position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%' }}
+                />
+                <LinearGradient
+                  colors={['transparent', colors.bg0]}
+                  style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 80 }}
+                />
+              </View>
+            </View>
+            {headline ? <PrMoment pr={headline} /> : <DoneMoment title={workout.title} />}
+          </View>
+
+          {report ? (
+            <FinishStats
+              durationMs={report.summary.durationMs}
+              volumeKg={report.summary.volumeKg}
+              sets={report.summary.completedSets}
+              records={report.prs.length}
+            />
+          ) : null}
+
+          {week ? (
+            <View
+              accessible
+              accessibilityLabel={`Weekdoel: ${week.done} van ${week.goal} trainingen${week.reached ? ', gehaald' : ''}`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, paddingHorizontal: space.xs }}
+            >
+              <BrandMark size={22} />
+              <Text variant="caption" tone={week.reached ? 'success' : 'secondary'} tnum style={{ flex: 1 }}>
+                {weekLine(week)}
+              </Text>
+            </View>
+          ) : null}
+
+          {details}
+        </ScrollView>
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: space.sm + 2,
+            paddingHorizontal: layout.screenPadding,
+            paddingVertical: space.md,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            backgroundColor: colors.bg0,
+          }}
+        >
+          <Button
+            label="Delen"
+            icon="share"
+            variant="secondary"
+            size="lg"
+            fullWidth
+            onPress={share}
+            accessibilityLabel={headline ? 'Deel je record' : 'Deel je training'}
+            style={{ flex: 1 }}
+          />
+          <Button
+            label="Klaar"
+            size="lg"
+            fullWidth
+            onPress={() => router.replace('/vandaag')}
+            accessibilityLabel="Klaar, terug naar Vandaag"
+            style={{ flex: 1 }}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <StackScreen
+      eyebrow={formatDateNl(workout.started_at)}
+      title={workout.title}
+      right={<IconButton icon="trash" accessibilityLabel="Training verwijderen" onPress={remove} color={colors.text2} />}
+    >
+      {report ? (
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <StatTile size="sm" value={formatElapsed(report.summary.durationMs)} caption="duur" />
+          <StatTile size="sm" value={formatNumberNl(report.summary.volumeKg, 0)} caption="kg volume" />
+          <StatTile size="sm" value={String(report.summary.completedSets)} caption="sets" />
+        </View>
+      ) : null}
+
+      {headline ? <PrCard pr={headline} /> : null}
+
+      {details}
     </StackScreen>
   );
 }
