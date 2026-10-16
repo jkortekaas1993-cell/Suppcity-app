@@ -28,7 +28,14 @@ jobs:
       - name: Install
         run: |
           if [ -f package-lock.json ]; then npm ci
-          else npm install --no-audit --no-fund && echo "GENERATED_LOCK=1" >> "$GITHUB_ENV"; fi
+          else
+            if ! npm install --no-audit --no-fund > npm-install.log 2>&1; then
+              # Surface the npm error as annotations (readable via the checks API).
+              grep -E "npm (error|ERR)" npm-install.log | tail -25 | while IFS= read -r l; do echo "::error::$l"; done
+              exit 1
+            fi
+            echo "GENERATED_LOCK=1" >> "$GITHUB_ENV"
+          fi
       - name: Upload generated lockfile (until it is committed)
         if: env.GENERATED_LOCK == '1'
         uses: actions/upload-artifact@v4
