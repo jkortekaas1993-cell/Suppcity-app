@@ -12,7 +12,13 @@ import { DISCLAIMER } from '../copy';
 import { addDays, localIsoDate, localTime, maskHas, scheduleLabel, weekdayOf, weekOf } from '../logic/schedule';
 import { daysLeftLabel } from '../logic/stock';
 import { buildTodayRows, stockRows, type TodayRow } from '../logic/today';
-import { loadReminderPrefs, setRemindersEnabled, type ReminderPrefs } from '../services/reminders';
+import {
+  loadReminderPrefs,
+  loadShowNamesInNotifications,
+  setRemindersEnabled,
+  setShowNamesInNotifications,
+  type ReminderPrefs,
+} from '../services/reminders';
 import { notifySupplementsChanged, useSupplementRepository, useSupplementsVersion } from '../services/store';
 
 interface Loaded {
@@ -21,6 +27,7 @@ interface Loaded {
   trainingDates: Set<string>;
   isTrainingDay: boolean;
   prefs: ReminderPrefs;
+  showNames: boolean;
 }
 
 /** "Mijn supplementen": week strip, today's list with check-off, stock bars, add button. */
@@ -39,9 +46,10 @@ export function SupplementsScreen() {
     const date = localIsoDate(now);
     setToday(date);
     const dates = weekOf(date);
-    const [items, prefs, history, trainingMask] = await Promise.all([
+    const [items, prefs, showNames, history, trainingMask] = await Promise.all([
       repo.list(),
       loadReminderPrefs(repo),
+      loadShowNamesInNotifications(repo),
       repos.workouts.history({ limit: 30 }).catch(() => []),
       repo.getSetting<number>('supplements.trainingDays'),
     ]);
@@ -52,6 +60,7 @@ export function SupplementsScreen() {
     setData({
       items,
       prefs,
+      showNames,
       trainingDates,
       isTrainingDay: trainingDates.has(date),
       rows: buildTodayRows(items, intakes, date, { workedOut: logged.has(date) }),
@@ -93,6 +102,11 @@ export function SupplementsScreen() {
     if (on && res.permission === 'denied') {
       Alert.alert('Meldingen staan uit', 'Zet meldingen voor Supp City aan in de instellingen van je telefoon om herinneringen te krijgen.');
     }
+    notifySupplementsChanged();
+  }
+
+  async function toggleNames(on: boolean) {
+    await setShowNamesInNotifications(repo, on);
     notifySupplementsChanged();
   }
 
@@ -223,6 +237,7 @@ export function SupplementsScreen() {
             title="Supplementherinneringen"
             subtitle={data?.prefs.enabled ? 'Melding op jouw tijden, met Ingenomen en Later' : 'Uit'}
             leading="calendar"
+            divider={data?.prefs.enabled ?? false}
             trailing={
               <Switch
                 accessibilityLabel="Supplementherinneringen"
@@ -232,6 +247,25 @@ export function SupplementsScreen() {
               />
             }
           />
+          {data?.prefs.enabled ? (
+            <ListRow
+              title="Toon namen in meldingen"
+              subtitle={
+                data.showNames
+                  ? 'Naam en hoeveelheid staan in de melding, ook op je vergrendelscherm'
+                  : 'Uit: je ziet alleen "Tijd voor je supplementen". Namen zie je in de app.'
+              }
+              leading="info"
+              trailing={
+                <Switch
+                  accessibilityLabel="Toon namen in meldingen"
+                  value={data.showNames}
+                  onValueChange={(v: boolean) => void toggleNames(v)}
+                  trackColor={{ true: colors.accent, false: colors.border }}
+                />
+              }
+            />
+          ) : null}
         </Card>
       ) : null}
 

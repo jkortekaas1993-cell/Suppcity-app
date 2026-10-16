@@ -7,8 +7,10 @@ import { daysFromMask, isValidTime, parseTime, type ScheduleLike } from './sched
  * - A time whose content is identical on all seven days becomes ONE daily trigger.
  * - iOS keeps at most 64 pending local notifications per app. We use at most
  *   `REMINDER_BUDGET` so the rest timer and a "Later" snooze always fit.
- * - Text is neutral (hard rule 4): "Herinnering: <name> (<the user's own dose text>)".
- *   No effect words, no advice.
+ * - Lock-screen privacy (review L8): by default the text is only "Tijd voor je
+ *   supplementen"; names and doses are shown in the app. Only when the user switched on
+ *   "Toon namen in meldingen" the body is "Herinnering: <name> (<the user's own dose>)".
+ * - Text is neutral either way (hard rule 4): no effect words, no advice.
  */
 
 export const IOS_PENDING_LIMIT = 64;
@@ -21,6 +23,8 @@ export const ACTION_LATER = 'supplement-later';
 export const SNOOZE_MINUTES = 30;
 export const REMINDER_ID_PREFIX = 'supp-';
 export const REMINDER_TITLE = 'Supp City';
+/** Default body: nothing about what or how much (visible on the lock screen). */
+export const NEUTRAL_REMINDER_BODY = 'Tijd voor je supplementen';
 
 export interface ReminderSupplement {
   id: string;
@@ -104,6 +108,7 @@ export function planReminders(
   schedules: readonly ScheduleLike[],
   supplements: readonly ReminderSupplement[],
   budget: number = REMINDER_BUDGET,
+  opts: { showNames?: boolean } = {},
 ): ReminderPlan {
   const byId = new Map(supplements.map((s) => [s.id, s]));
   // time -> weekday -> slot
@@ -135,7 +140,7 @@ export function planReminders(
         id,
         trigger,
         title: REMINDER_TITLE,
-        body: reminderBody(items),
+        body: opts.showNames === true ? reminderBody(items) : NEUTRAL_REMINDER_BODY,
         data: { kind: 'supplement-reminder', scheduleIds: [...sl.scheduleIds].sort(), time },
       };
     };

@@ -34,6 +34,17 @@ export interface ReminderPrefs {
 }
 
 const PREFS_KEY = 'supplements.reminders';
+const NAMES_KEY = 'supplements.notificationNames';
+
+/** "Toon namen in meldingen": off by default (lock screen shows only a neutral line). */
+export async function loadShowNamesInNotifications(repo: SupplementRepository): Promise<boolean> {
+  return (await repo.getSetting<boolean>(NAMES_KEY).catch(() => null)) === true;
+}
+
+export async function setShowNamesInNotifications(repo: SupplementRepository, on: boolean): Promise<void> {
+  await repo.setSetting(NAMES_KEY, on);
+  await rescheduleSupplementReminders(repo);
+}
 const SNOOZE_ID_PREFIX = 'suppsnooze-';
 
 export async function loadReminderPrefs(repo: SupplementRepository): Promise<ReminderPrefs> {
@@ -119,10 +130,12 @@ export function rescheduleSupplementReminders(repo: SupplementRepository): Promi
     const prefs = await loadReminderPrefs(repo);
     if (!prefs.enabled || !(await osPermissionGranted())) return;
     await ensureCategory();
-    const items = await repo.list();
+    const [items, showNames] = await Promise.all([repo.list(), loadShowNamesInNotifications(repo)]);
     const plan = planReminders(
       items.flatMap((s) => s.schedules),
       items,
+      undefined,
+      { showNames },
     );
     for (const r of plan.reminders) {
       await Notifications.scheduleNotificationAsync({

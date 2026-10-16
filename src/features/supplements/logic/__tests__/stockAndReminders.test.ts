@@ -7,6 +7,7 @@ import {
   IOS_PENDING_LIMIT,
   isNeutralCopy,
   parseReminderData,
+  NEUTRAL_REMINDER_BODY,
   planReminders,
   reminderBody,
   REMINDER_BUDGET,
@@ -79,7 +80,7 @@ describe('reminder plan', () => {
 
   it('uses one daily trigger for a time that is the same every day', () => {
     const schedules: ScheduleLike[] = [{ id: 's1', supplement_id: 'om', days_mask: EVERY_DAY, mode: 'fixed', time_local: '08:00' }];
-    const plan = planReminders(schedules, supplements);
+    const plan = planReminders(schedules, supplements, undefined, { showNames: true });
     expect(plan.dropped).toBe(0);
     expect(plan.reminders).toEqual([
       {
@@ -97,7 +98,7 @@ describe('reminder plan', () => {
       { id: 's1', supplement_id: 'cr', days_mask: maskFromDays([0, 2]), mode: 'training', time_local: '17:30' },
       { id: 's2', supplement_id: 'zz', days_mask: maskFromDays([0]), mode: 'fixed', time_local: '17:30' },
     ];
-    const plan = planReminders(schedules, supplements);
+    const plan = planReminders(schedules, supplements, undefined, { showNames: true });
     expect(plan.reminders.map((r) => [r.id, r.trigger, r.body])).toEqual([
       ['supp-w0-1730', { kind: 'weekly', weekday: 0, hour: 17, minute: 30 }, 'Herinnering: Creatine (5 g), Magnesium'],
       ['supp-w2-1730', { kind: 'weekly', weekday: 2, hour: 17, minute: 30 }, 'Herinnering: Creatine (5 g)'],
@@ -148,6 +149,16 @@ describe('reminder plan', () => {
     expect(parseReminderData({ kind: 'other' })).toBeNull();
     expect(parseReminderData({ kind: 'supplement-reminder', scheduleIds: [1], time: '08:00' })).toBeNull();
     expect(parseReminderData(null)).toBeNull();
+  });
+
+  it('lock screen: no names or doses unless the user switched them on (review L8)', () => {
+    const schedules: ScheduleLike[] = [{ id: 's1', supplement_id: 'cr', days_mask: EVERY_DAY, mode: 'fixed', time_local: '08:00' }];
+    const [r] = planReminders(schedules, supplements).reminders;
+    expect(r?.body).toBe(NEUTRAL_REMINDER_BODY);
+    expect(NEUTRAL_REMINDER_BODY).toBe('Tijd voor je supplementen');
+    expect(`${r?.title} ${r?.body}`).not.toMatch(/Creatine|5 g/);
+    expect(planReminders(schedules, supplements, undefined, { showNames: false }).reminders[0]?.body).toBe(NEUTRAL_REMINDER_BODY);
+    expect(isNeutralCopy(NEUTRAL_REMINDER_BODY)).toBe(true);
   });
 
   it('app-authored copy is neutral (hard rule 4)', () => {
