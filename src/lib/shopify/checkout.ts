@@ -1,4 +1,5 @@
 import { ColorScheme, ShopifyCheckoutSheet } from '@shopify/checkout-sheet-kit';
+import type { CheckoutCompletedEvent, CheckoutException } from '@shopify/checkout-sheet-kit';
 
 /**
  * Thin wrapper around @shopify/checkout-sheet-kit 3.x (Shopify's native checkout sheet).
@@ -27,11 +28,11 @@ export function preloadCheckout(checkoutUrl: string): void {
 /** Present checkout and wire lifecycle events. Returns a cleanup function. */
 export function presentCheckout(checkoutUrl: string, handlers: CheckoutHandlers): () => void {
   const subs = [
-    sheet.addEventListener('completed', (event) => {
+    sheet.addEventListener('completed', (event: CheckoutCompletedEvent) => {
       handlers.onCompleted(event.orderDetails?.id ?? null);
     }),
     sheet.addEventListener('close', () => handlers.onClose?.()),
-    sheet.addEventListener('error', (error) => handlers.onError?.(error.message)),
+    sheet.addEventListener('error', (error: CheckoutException) => handlers.onError?.(error.message)),
   ];
   sheet.present(checkoutUrl);
   return () => subs.forEach((s) => s?.remove());

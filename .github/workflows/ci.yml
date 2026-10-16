@@ -9,6 +9,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -43,6 +46,15 @@ jobs:
           name: package-lock
           path: package-lock.json
           if-no-files-found: ignore
+      - name: Push generated lockfile to ci/lockfile branch (until it is committed)
+        if: env.GENERATED_LOCK == '1' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b ci/lockfile
+          git add -f package-lock.json
+          git commit -m "chore: generated package-lock.json from CI"
+          git push -f origin ci/lockfile
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
