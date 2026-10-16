@@ -1,6 +1,7 @@
 import { createCustomerAccountClient, discoverCustomerAccount, exchangeCode } from '../customerAccount';
 import { orderStatusLabel } from '../customerAccountMappers';
 import { createTokenManager, type KeyValueStore } from '../customerSession';
+import { ShopifyApiError } from '../errors';
 import type { FetchLike } from '../http';
 
 const eur = (amount: string) => ({ amount, currencyCode: 'EUR' });
@@ -120,7 +121,6 @@ describe('token manager', () => {
   it('signs out when the refresh token is rejected', async () => {
     const store = memoryStore();
     let signedOut = false;
-    const { ShopifyApiError } = await import('../errors');
     const tm = createTokenManager({
       store,
       now: () => 10_000_000,
