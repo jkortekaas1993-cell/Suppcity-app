@@ -30,7 +30,11 @@ jobs:
       # (the lockfile is generated in CI: download the package-lock artifact and commit it).
       - name: Install
         run: |
-          if [ -f package-lock.json ]; then npm ci
+          if [ -f package-lock.json ]; then
+            if ! npm ci --no-audit --no-fund > npm-install.log 2>&1; then
+              grep -E "npm (error|ERR)" npm-install.log | tail -25 | while IFS= read -r l; do echo "::error::$l"; done
+              exit 1
+            fi
           else
             if ! npm install --no-audit --no-fund > npm-install.log 2>&1; then
               # Surface the npm error as annotations (readable via the checks API).
