@@ -68,4 +68,19 @@ jobs:
             exit 1
           fi
       - name: Test
-        run: npm test
+        run: |
+          if ! npm test -- --json --outputFile=jest.json > jest.log 2>&1; then
+            node -e "
+              const fs = require('fs');
+              let r; try { r = JSON.parse(fs.readFileSync('jest.json', 'utf8')); } catch { r = null; }
+              const clean = (t) => String(t).replace(/\\u001b\\[[0-9;]*m/g, '').split('\\n').filter(Boolean).slice(0, 6).join(' | ').slice(0, 900);
+              if (!r) { console.log('::error::' + clean(fs.readFileSync('jest.log', 'utf8').slice(-3000))); process.exit(0); }
+              for (const f of r.testResults) {
+                const file = f.name.replace(process.cwd() + '/', '');
+                if (f.status === 'failed' && f.assertionResults.every(a => a.status !== 'failed')) console.log('::error file=' + file + '::' + clean(f.message));
+                for (const a of f.assertionResults) if (a.status === 'failed') console.log('::error file=' + file + '::' + a.fullName + ' -> ' + clean(a.failureMessages.join(' ')));
+              }
+              console.log('::error::totals ' + r.numPassedTests + ' passed, ' + r.numFailedTests + ' failed, suites failed ' + r.numFailedTestSuites);
+            "
+            exit 1
+          fi
