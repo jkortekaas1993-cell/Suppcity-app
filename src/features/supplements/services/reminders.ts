@@ -12,6 +12,7 @@ import {
   REMINDER_CATEGORY,
   REMINDER_ID_PREFIX,
   SNOOZE_MINUTES,
+  toExpoWeekday,
   type PlannedReminder,
   type ReminderData,
 } from '../logic/reminderPlan';
@@ -85,17 +86,19 @@ async function ensureCategory(): Promise<void> {
   }
 }
 
-function triggerFor(r: PlannedReminder) {
-  const T = Notifications.SchedulableTriggerInputTypes;
-  return r.trigger.kind === 'daily'
-    ? { type: T.DAILY, hour: r.trigger.hour, minute: r.trigger.minute }
-    : {
-        type: T.WEEKLY,
-        // expo: 1 = Sunday ... 7 = Saturday
-        weekday: ((r.trigger.weekday + 1) % 7) + 1,
-        hour: r.trigger.hour,
-        minute: r.trigger.minute,
-      };
+function triggerFor(r: PlannedReminder): Notifications.NotificationTriggerInput {
+  const t = r.trigger;
+  if (t.kind === 'daily') {
+    const daily: Notifications.DailyTriggerInput = { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: t.hour, minute: t.minute };
+    return daily;
+  }
+  const weekly: Notifications.WeeklyTriggerInput = {
+    type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+    weekday: toExpoWeekday(t.weekday),
+    hour: t.hour,
+    minute: t.minute,
+  };
+  return weekly;
 }
 
 async function cancelOurs(): Promise<void> {
