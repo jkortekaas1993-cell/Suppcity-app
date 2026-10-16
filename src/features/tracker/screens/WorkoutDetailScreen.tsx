@@ -140,10 +140,13 @@ export function WorkoutDetailScreen() {
         if (e) exercises.set(e.id, e);
       }
     }
-    // Badges are recomputed locally; failures never block the summary.
-    const badges = await syncBadges(repos)
-      .then((r) => badgesFromWorkout(r.stored, id))
-      .catch(() => [] as BadgeDefinition[]);
+    // "Badge ontgrendeld" only on the summary right after finishing, never when an old
+    // workout is opened from the history. Recomputed locally; failures never block the summary.
+    const badges = justFinished
+      ? await syncBadges(repos)
+          .then((r) => badgesFromWorkout(r.stored, id))
+          .catch(() => [] as BadgeDefinition[])
+      : [];
     let week: ReturnType<typeof weekGoalProgress> | null = null;
     if (justFinished) {
       const [goal, recent] = await Promise.all([loadWeeklyGoal(repos.appState), repos.workouts.historyWithStats({ limit: 20 })]);
