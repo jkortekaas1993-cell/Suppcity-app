@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          # npm cache needs package-lock.json; re-add `cache: npm` once it is committed.
       # Hard rule 7: exact versions only (no ^ or ~ ranges).
       - name: Check pinned versions
         run: |
