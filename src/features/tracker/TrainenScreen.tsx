@@ -1,13 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
 
 import { useRepositories } from '@/lib/db';
-import { Button, Card, ListItem, Screen, Text, useTheme } from '@/ui';
+import { Button, Card, EmptyState, ListRow, Pill, Screen, SectionLabel, Text } from '@/ui';
 
 import { useActiveWorkout, useActiveWorkoutActions } from './activeWorkoutStore';
 import { useFocusQuery } from './components/useFocusQuery';
-import { formatKg } from './logic/format';
+import { formatNumberNl } from './logic/format';
 import { nextRoutine } from './logic/routines';
 import { workoutSubtitle } from './screens/HistoryScreen';
 import { loadRecords } from './screens/PrListScreen';
@@ -21,7 +20,6 @@ export function TrainenScreen() {
   const router = useRouter();
   const workout = useActiveWorkout();
   const actions = useActiveWorkoutActions();
-  const { space } = useTheme();
   const [starting, setStarting] = useState(false);
 
   const load = useCallback(async () => {
@@ -49,78 +47,114 @@ export function TrainenScreen() {
     }
   };
 
+  const routines = data?.routines ?? [];
+  const history = data?.history ?? [];
+  const records = data?.records ?? [];
+
   return (
     <Screen title="Trainen" subtitle="Log je sets. Geen reclame, geen afleiding.">
-      <Card eyebrow={workout ? 'Bezig' : 'Snel starten'} highlighted={workout !== null}>
-        {workout ? (
-          <Button label="Ga verder met training" fullWidth onPress={() => router.push('/workout')} />
-        ) : (
-          <Button label="Lege training starten" fullWidth loading={starting} onPress={() => void startEmpty()} />
-        )}
-      </Card>
+      {workout ? (
+        <Button label="Ga verder met training" icon="play" size="lg" fullWidth onPress={() => router.push('/workout')} />
+      ) : (
+        <Button label="Lege training starten" icon="play" size="lg" fullWidth loading={starting} onPress={() => void startEmpty()} />
+      )}
 
-      <Card eyebrow="Routines">
-        {data && data.routines.length === 0 ? (
-          <Text tone="muted">Nog geen routines. Kies een kant-en-klaar schema of maak er zelf een.</Text>
-        ) : null}
-        <View>
-          {(data?.routines ?? []).map((r) => (
-            <ListItem
+      <SectionLabel label="Routines" action={{ label: "Schema's", onPress: () => router.push('/routine/schemas'), accessibilityLabel: "Kant-en-klare schema's" }} />
+      {data && routines.length === 0 ? (
+        <EmptyState
+          icon="calendar"
+          title="Nog geen routines"
+          body="Kies een kant-en-klaar schema of maak er zelf een."
+          action={{ label: "Schema's bekijken", onPress: () => router.push('/routine/schemas'), variant: 'secondary' }}
+        />
+      ) : (
+        <Card padding={0} gap={0}>
+          {routines.map((r, i) => (
+            <ListRow
               key={r.id}
               title={r.name}
-              subtitle={r.id === data?.nextId ? 'Volgende' : undefined}
+              leading="dumbbell"
+              trailing={r.id === data?.nextId ? <Pill label="Volgende" /> : undefined}
+              chevron
+              divider={i < routines.length - 1}
               onPress={() => router.push(`/routine/${r.id}`)}
+              accessibilityLabel={r.id === data?.nextId ? `${r.name}, volgende training` : r.name}
             />
           ))}
-        </View>
-        <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-          <Button label="Schema's" variant="secondary" onPress={() => router.push('/routine/schemas')} />
-          <Button label="Nieuwe routine" variant="secondary" onPress={() => router.push('/routine/nieuw')} />
-        </View>
-      </Card>
+        </Card>
+      )}
+      <Button label="+ Nieuwe routine" variant="link" onPress={() => router.push('/routine/nieuw')} />
 
-      <Card eyebrow="Historie">
-        {data && data.history.length === 0 ? <Text tone="muted">Je afgeronde trainingen verschijnen hier.</Text> : null}
-        <View>
-          {(data?.history ?? []).map((w) => (
-            <ListItem
+      <SectionLabel
+        label="Historie"
+        action={history.length > 0 ? { label: 'Alles', onPress: () => router.push('/workout/historie'), accessibilityLabel: 'Alle trainingen' } : undefined}
+      />
+      {data && history.length === 0 ? (
+        <Card>
+          <Text tone="secondary">Je afgeronde trainingen verschijnen hier.</Text>
+        </Card>
+      ) : (
+        <Card padding={0} gap={0}>
+          {history.map((w, i) => (
+            <ListRow
               key={w.id}
               title={w.title}
               subtitle={workoutSubtitle(w)}
-              value={formatKg(w.volume_kg, 0)}
+              value={`${formatNumberNl(w.volume_kg, 0)} kg`}
+              divider={i < history.length - 1}
               onPress={() => router.push(`/workout/${w.id}`)}
             />
           ))}
-        </View>
-        {data && data.history.length > 0 ? (
-          <Button label="Alle trainingen" variant="ghost" onPress={() => router.push('/workout/historie')} />
-        ) : null}
-      </Card>
+        </Card>
+      )}
 
-      <Card eyebrow="Records">
-        {data && data.records.length === 0 ? <Text tone="muted">Nog geen records. Die komen vanzelf.</Text> : null}
-        <View>
-          {(data?.records ?? []).map((r) => (
-            <ListItem
+      <SectionLabel
+        label="Records"
+        action={records.length > 0 ? { label: 'Alles', onPress: () => router.push('/workout/records'), accessibilityLabel: 'Alle records' } : undefined}
+      />
+      {data && records.length === 0 ? (
+        <Card>
+          <Text tone="secondary">Nog geen records. Die komen vanzelf.</Text>
+        </Card>
+      ) : (
+        <Card padding={0} gap={0}>
+          {records.map((r, i) => (
+            <ListRow
               key={r.exerciseId}
               title={r.name}
               subtitle={r.heaviest}
               value={r.e1rm}
+              leading="trophy"
+              divider={i < records.length - 1}
               onPress={() => router.push(`/exercise/${encodeURIComponent(r.exerciseId)}`)}
+              accessibilityLabel={`${r.name}, zwaarste set ${r.heaviest}, geschat 1RM ${r.e1rm}`}
             />
           ))}
-        </View>
-        {data && data.records.length > 0 ? (
-          <Button label="Alle records" variant="ghost" onPress={() => router.push('/workout/records')} />
-        ) : null}
-      </Card>
+        </Card>
+      )}
 
-      <Card eyebrow="Tools">
-        <View>
-          <ListItem title="Oefeningen" subtitle="Bibliotheek en eigen oefeningen" onPress={() => router.push('/exercise/picker?mode=browse')} />
-          <ListItem title="Platencalculator" subtitle="Welke schijven per kant" onPress={() => router.push('/workout/platen')} />
-          <ListItem title="Importeren en exporteren" subtitle="Hevy, Strong, CSV" onPress={() => router.push('/workout/data')} />
-        </View>
+      <SectionLabel label="Tools" />
+      <Card padding={0} gap={0}>
+        <ListRow
+          title="Oefeningen"
+          subtitle="Bibliotheek en eigen oefeningen"
+          leading="search"
+          divider
+          onPress={() => router.push('/exercise/picker?mode=browse')}
+        />
+        <ListRow
+          title="Platencalculator"
+          subtitle="Welke schijven per kant"
+          leading="dumbbell"
+          divider
+          onPress={() => router.push('/workout/platen')}
+        />
+        <ListRow
+          title="Importeren en exporteren"
+          subtitle="Hevy, Strong, CSV"
+          leading="share"
+          onPress={() => router.push('/workout/data')}
+        />
       </Card>
     </Screen>
   );

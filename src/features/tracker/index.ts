@@ -9,6 +9,9 @@ export {
   type ActiveWorkoutState,
 } from './activeWorkoutStore';
 export { TrainenScreen } from './TrainenScreen';
+export { BadgeMedal, BadgesSection, WeeklyGoalPicker, type BadgesSectionProps } from './components/BadgesSection';
+export { useBadges, useWeeklyGoal, type UseBadgesResult } from './hooks/useBadges';
+export { BADGES, type BadgeDefinition, type BadgeId, type BadgeView } from './logic/badges';
 export { VandaagScreen, type VandaagScreenProps } from './VandaagScreen';
 export { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 export { WorkoutDetailScreen } from './screens/WorkoutDetailScreen';

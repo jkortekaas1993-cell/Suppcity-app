@@ -1,123 +1,59 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import { ScrollView, TextInput, View, type StyleProp, type TextInputProps, type TextStyle } from 'react-native';
 
-import { HIT_SLOP_MIN, Text, useTheme } from '@/ui';
+import { HIT_SLOP_MIN, Text, tnum, useTheme } from '@/ui';
 
 import { formatNumberNl, parseDecimalInput } from '../logic/format';
-import { normalizeSeries } from '../logic/progress';
 
-/** Square 48pt text-glyph button (no icon font dependency). */
-export function IconButton({
-  glyph,
-  label,
-  onPress,
-  onLongPress,
-  active = false,
-  tone = 'default',
-  disabled = false,
-  testID,
-}: {
-  glyph: string;
-  label: string;
-  onPress?: () => void;
-  onLongPress?: () => void;
-  active?: boolean;
-  tone?: 'default' | 'danger';
-  disabled?: boolean;
-  testID?: string;
-}) {
-  const { colors, radius } = useTheme();
-  const fg = active ? colors.textOnAccent : tone === 'danger' ? colors.danger : colors.text;
+/** Horizontal row of chips that scrolls instead of wrapping (design-system rule for Chip). */
+export function ChipRow({ children }: { children: ReactNode }) {
+  const { space, layout } = useTheme();
   return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active, disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      hitSlop={4}
-      style={({ pressed }) => ({
-        width: HIT_SLOP_MIN,
-        height: HIT_SLOP_MIN,
-        borderRadius: radius.sm,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: active ? colors.accent : pressed ? colors.border : colors.surfaceRaised,
-        borderWidth: 1,
-        borderColor: active ? colors.accent : colors.border,
-        opacity: disabled ? 0.4 : 1,
-      })}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      style={{ marginHorizontal: -layout.screenPadding }}
+      contentContainerStyle={{ gap: space.sm, paddingHorizontal: layout.screenPadding, paddingVertical: space.xs }}
     >
-      <Text variant="heading" style={{ color: fg, fontSize: 18 }}>
-        {glyph}
-      </Text>
-    </Pressable>
+      {children}
+    </ScrollView>
   );
 }
 
-/** Small selectable pill for filters. */
-export function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  const { colors, radius, space } = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={{
-        minHeight: 36,
-        paddingHorizontal: space.md,
-        justifyContent: 'center',
-        borderRadius: radius.pill,
-        borderWidth: 1,
-        borderColor: selected ? colors.accent : colors.border,
-        backgroundColor: selected ? colors.surfaceRaised : 'transparent',
-      }}
-    >
-      <Text variant="label" tone={selected ? 'accent' : 'muted'}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
+/** Wrapping row (buttons, small groups). */
 export function Row({ children, gap }: { children: ReactNode; gap?: number }) {
   const { space } = useTheme();
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: gap ?? space.sm, flexWrap: 'wrap' }}>{children}</View>;
 }
 
-/** Big tabular number with a label underneath (summary tiles). */
-export function Stat({ label, value }: { label: string; value: string }) {
-  const { space } = useTheme();
-  return (
-    <View style={{ flexGrow: 1, flexBasis: '40%', gap: space.xxs }}>
-      <Text variant="metric" style={{ fontSize: 24, lineHeight: 28 }}>
-        {value}
-      </Text>
-      <Text variant="label" tone="muted">
-        {label}
-      </Text>
-    </View>
-  );
-}
-
+/** Single-line text input in the design-system style (bg2 well, strong border on focus). */
 export function TextField(props: TextInputProps) {
-  const { colors, radius, space } = useTheme();
+  const { colors, radius, space, type } = useTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <TextInput
-      placeholderTextColor={colors.textMuted}
+      placeholderTextColor={colors.text3}
+      selectionColor={colors.accent}
       {...props}
+      onFocus={(...args: Parameters<NonNullable<TextInputProps['onFocus']>>) => {
+        setFocused(true);
+        props.onFocus?.(...args);
+      }}
+      onBlur={(...args: Parameters<NonNullable<TextInputProps['onBlur']>>) => {
+        setFocused(false);
+        props.onBlur?.(...args);
+      }}
       style={[
+        type.body,
         {
           minHeight: HIT_SLOP_MIN,
-          paddingHorizontal: space.md,
+          paddingHorizontal: space.md + 2,
           borderRadius: radius.sm,
           borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surfaceRaised,
-          color: colors.text,
-          fontSize: 16,
+          borderColor: focused ? colors.borderStrong : colors.border,
+          backgroundColor: colors.bg2,
+          color: colors.text1,
         },
         props.style,
       ]}
@@ -129,6 +65,8 @@ export function TextField(props: TextInputProps) {
  * Numeric input that keeps the typed text (so "62," survives) and reports a
  * parsed number (or null) to the parent. Re-syncs when the value changes
  * from outside, e.g. when ticking a set copies "vorige keer".
+ *
+ * `done` renders it as plain text on the completed (accentMuted) set row.
  */
 export function NumberField({
   value,
@@ -137,6 +75,8 @@ export function NumberField({
   placeholder,
   accessibilityLabel,
   done = false,
+  align = 'center',
+  style,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
@@ -144,10 +84,13 @@ export function NumberField({
   placeholder?: string;
   accessibilityLabel: string;
   done?: boolean;
+  align?: 'center' | 'right';
+  style?: StyleProp<TextStyle>;
 }) {
-  const { colors, radius } = useTheme();
+  const { colors, radius, type } = useTheme();
   const toText = (v: number | null) => (v === null ? '' : formatNumberNl(v, decimals));
   const [text, setText] = useState(() => toText(value));
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     if (parseDecimalInput(text) !== value) setText(toText(value));
@@ -160,86 +103,54 @@ export function NumberField({
       accessibilityLabel={accessibilityLabel}
       value={text}
       placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
+      placeholderTextColor={colors.text3}
+      selectionColor={colors.accent}
       keyboardType={decimals > 0 ? 'decimal-pad' : 'number-pad'}
       selectTextOnFocus
       returnKeyType="done"
+      maxFontSizeMultiplier={1.3}
       onChangeText={(t) => {
         setText(t);
         const n = parseDecimalInput(t);
         if (t.trim() === '') onChange(null);
         else if (n !== null) onChange(decimals === 0 ? Math.round(n) : n);
       }}
-      onBlur={() => setText(toText(value))}
-      style={{
-        flex: 1,
-        minHeight: 44,
-        textAlign: 'center',
-        borderRadius: radius.sm,
-        backgroundColor: done ? 'transparent' : colors.surfaceRaised,
-        borderWidth: 1,
-        borderColor: done ? 'transparent' : colors.border,
-        color: colors.text,
-        fontSize: 18,
-        fontWeight: '700',
-        fontVariant: ['tabular-nums'],
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        setText(toText(value));
       }}
+      style={[
+        type.heading,
+        tnum,
+        {
+          minHeight: 40,
+          paddingHorizontal: 10,
+          paddingVertical: 0,
+          textAlign: align,
+          borderRadius: radius.sm,
+          backgroundColor: done ? 'transparent' : colors.bg2,
+          borderWidth: 1,
+          borderColor: focused ? colors.accent : done ? 'transparent' : colors.bg2,
+          color: colors.text1,
+          fontSize: 18,
+          lineHeight: 22,
+        },
+        style,
+      ]}
     />
   );
 }
 
-/** Simple bar chart drawn with Views (react-native-svg is not a dependency). */
-export function BarChart({
-  values,
-  labels,
-  height = 120,
-  accessibilityLabel,
-}: {
-  values: number[];
-  labels: string[];
-  height?: number;
-  accessibilityLabel: string;
-}) {
-  const { colors, space, radius } = useTheme();
-  const scaled = normalizeSeries(values);
-  return (
-    <View accessible accessibilityLabel={accessibilityLabel} style={{ gap: space.xs }}>
-      <View style={{ height, flexDirection: 'row', alignItems: 'flex-end', gap: space.xs }}>
-        {scaled.map((h, i) => (
-          <View
-            key={i}
-            style={{
-              flex: 1,
-              height: Math.max(2, h * height),
-              borderTopLeftRadius: radius.sm,
-              borderTopRightRadius: radius.sm,
-              backgroundColor: i === scaled.length - 1 ? colors.accent : colors.border,
-            }}
-          />
-        ))}
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text variant="caption" tone="muted">
-          {labels[0] ?? ''}
-        </Text>
-        <Text variant="caption" tone="muted">
-          {labels[labels.length - 1] ?? ''}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-/** Header row for stack screens: back button + title. */
-export function StackHeader({ title, onBack, right }: { title: string; onBack: () => void; right?: ReactNode }) {
+/** Small labelled field for compact forms (routine editor). */
+export function LabeledField({ label, children }: { label: string; children: ReactNode }) {
   const { space } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-      <IconButton glyph="‹" label="Terug" onPress={onBack} />
-      <Text variant="title" numberOfLines={1} style={{ flex: 1 }} accessibilityRole="header">
-        {title}
+    <View style={{ flex: 1, gap: space.xs }}>
+      <Text variant="eyebrow" tone="tertiary" numberOfLines={1}>
+        {label}
       </Text>
-      {right}
+      <View style={{ flexDirection: 'row' }}>{children}</View>
     </View>
   );
 }

@@ -6,6 +6,7 @@ import type {
   Routine,
   RoutineExercise,
   SetType,
+  UserBadge,
   Uuid,
   Workout,
   WorkoutSet,
@@ -137,6 +138,14 @@ export interface AppStateRepository {
   remove(key: string): Promise<void>;
 }
 
+/** Earned milestones. Local only; earned badges are kept (never re-locked). */
+export interface BadgeRepository {
+  /** Live badges, oldest first. */
+  list(): Promise<UserBadge[]>;
+  /** Inserts badges that are not stored yet (by badge_id); returns the ids actually inserted. */
+  addMany(rows: { badge_id: string; earned_at: IsoDateTime; source_ref: Uuid | null }[]): Promise<string[]>;
+}
+
 /**
  * Sync seam for Backend&Sync (custom sync now, PowerSync later). Includes soft-deleted
  * rows. Structurally satisfies `LocalSyncStore` in src/lib/db/sync/types.ts.
@@ -159,6 +168,7 @@ export interface Repositories {
   sets: SetRepository;
   dataPort: DataPortRepository;
   appState: AppStateRepository;
+  badges: BadgeRepository;
   sync: SyncSource;
   /** Inserts/updates the built-in exercise library (idempotent). */
   seedLibrary(): Promise<void>;

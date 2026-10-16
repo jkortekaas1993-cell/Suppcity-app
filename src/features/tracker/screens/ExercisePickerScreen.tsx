@@ -3,10 +3,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { useRepositories, type Equipment, type MuscleGroup } from '@/lib/db';
-import { Button, Card, ListItem, Text, useTheme } from '@/ui';
+import { Button, Card, Chip, Icon, ListRow, Text, useTheme } from '@/ui';
 
 import { useActiveWorkoutActions } from '../activeWorkoutStore';
-import { Chip, Row, TextField } from '../components/primitives';
+import { ChipRow, TextField } from '../components/primitives';
 import { StackScreen } from '../components/StackScreen';
 import { useFocusQuery } from '../components/useFocusQuery';
 import { EQUIPMENT_LABELS_NL, MUSCLE_FILTERS, MUSCLE_LABELS_NL } from '../components/labels';
@@ -23,7 +23,7 @@ export function ExercisePickerScreen() {
   const repos = useRepositories();
   const actions = useActiveWorkoutActions();
   const router = useRouter();
-  const { space } = useTheme();
+  const { colors, space } = useTheme();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -77,51 +77,59 @@ export function ExercisePickerScreen() {
         autoCorrect={false}
         clearButtonMode="while-editing"
       />
-      <Row>
+      <ChipRow>
+        <Chip label="Alles" selected={filter === null} onPress={() => setFilter(null)} />
         {MUSCLE_FILTERS.map((f) => (
           <Chip key={f.label} label={f.label} selected={filter === f.label} onPress={() => setFilter(filter === f.label ? null : f.label)} />
         ))}
-      </Row>
+      </ChipRow>
 
       {creating ? (
         <Card eyebrow="Eigen oefening">
           <Text variant="heading">{search.trim() || 'Typ eerst een naam in het zoekveld'}</Text>
-          <Text variant="label" tone="muted">
+          <Text variant="eyebrow" tone="tertiary">
             Spiergroep
           </Text>
-          <Row>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
             {(Object.keys(MUSCLE_LABELS_NL) as MuscleGroup[]).map((m) => (
               <Chip key={m} label={MUSCLE_LABELS_NL[m]} selected={newMuscle === m} onPress={() => setNewMuscle(m)} />
             ))}
-          </Row>
-          <Text variant="label" tone="muted">
+          </View>
+          <Text variant="eyebrow" tone="tertiary">
             Materiaal
           </Text>
-          <Row>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
             {(Object.keys(EQUIPMENT_LABELS_NL) as Equipment[]).map((q) => (
               <Chip key={q} label={EQUIPMENT_LABELS_NL[q]} selected={newEquipment === q} onPress={() => setNewEquipment(q)} />
             ))}
-          </Row>
+          </View>
           <View style={{ flexDirection: 'row', gap: space.sm }}>
             <Button label="Annuleren" variant="ghost" onPress={() => setCreating(false)} />
             <Button label="Opslaan" disabled={!search.trim()} onPress={() => void createCustom()} />
           </View>
         </Card>
       ) : (
-        <Button label="+ Eigen oefening" variant="secondary" onPress={() => setCreating(true)} />
+        <Button label="+ Eigen oefening" variant="link" onPress={() => setCreating(true)} />
       )}
 
-      <View>
-        {visible.map((e) => (
-          <ListItem
-            key={e.id}
-            title={e.name_nl}
-            subtitle={`${MUSCLE_LABELS_NL[e.primary_muscle]} · ${EQUIPMENT_LABELS_NL[e.equipment]}${e.is_custom ? ' · eigen' : ''}`}
-            onPress={() => choose(e.id)}
-          />
-        ))}
-        {data && visible.length === 0 ? <Text tone="muted">Niets gevonden. Maak een eigen oefening aan.</Text> : null}
-      </View>
+      {data && visible.length === 0 ? (
+        <Text tone="secondary">Niets gevonden. Maak een eigen oefening aan.</Text>
+      ) : (
+        <Card padding={0} gap={0}>
+          {visible.map((e, i) => (
+            <ListRow
+              key={e.id}
+              title={e.name_nl}
+              subtitle={`${MUSCLE_LABELS_NL[e.primary_muscle]} · ${EQUIPMENT_LABELS_NL[e.equipment]}${e.is_custom ? ' · eigen' : ''}`}
+              chevron={mode === 'browse'}
+              trailing={mode === 'browse' ? undefined : <Icon name="plus" size={20} color={colors.text2} />}
+              divider={i < visible.length - 1}
+              onPress={() => choose(e.id)}
+              accessibilityHint={mode === 'browse' ? 'Bekijk de oefening' : 'Voeg toe'}
+            />
+          ))}
+        </Card>
+      )}
     </StackScreen>
   );
 }

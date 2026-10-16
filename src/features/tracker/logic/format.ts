@@ -72,3 +72,44 @@ export function parseDecimalInput(text: string): number | null {
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
+
+const DAYS_LONG_NL = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'] as const;
+const MONTHS_LONG_NL = [
+  'januari',
+  'februari',
+  'maart',
+  'april',
+  'mei',
+  'juni',
+  'juli',
+  'augustus',
+  'september',
+  'oktober',
+  'november',
+  'december',
+] as const;
+
+/** "Vrijdag 16 oktober" in local time (Vandaag header). */
+export function formatLongDateNl(at: string | number | Date): string {
+  const d = at instanceof Date ? at : new Date(at);
+  if (Number.isNaN(d.getTime())) return '–';
+  const day = DAYS_LONG_NL[d.getDay()] ?? '';
+  return `${day.charAt(0).toUpperCase()}${day.slice(1)} ${d.getDate()} ${MONTHS_LONG_NL[d.getMonth()]}`;
+}
+
+/** 18_420 kg -> "18,4" (tonnes, one decimal). */
+export function formatTonnes(kg: number): string {
+  return formatNumberNl(kg / 1000, 1);
+}
+
+/** Signed percentage: 8 -> "+8%", -3 -> "-3%". */
+export function formatSignedPct(pct: number): string {
+  return `${pct > 0 ? '+' : ''}${pct}%`;
+}
+
+/** "17:05" in local time. */
+export function formatClockNl(at: string | number | Date): string {
+  const d = at instanceof Date ? at : new Date(at);
+  if (Number.isNaN(d.getTime())) return '–';
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+}

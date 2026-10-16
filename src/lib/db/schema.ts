@@ -112,6 +112,25 @@ CREATE INDEX IF NOT EXISTS sets_exercise_workout_idx ON sets(exercise_id, workou
 CREATE INDEX IF NOT EXISTS workouts_ended_idx ON workouts(ended_at);
 `,
   },
+  {
+    version: 3,
+    name: 'user_badges',
+    // Milestones (Mijlpalen). LOCAL ONLY for now (not in TRACKER_TABLES, never synced):
+    // badges are derived from training data and are never used for points, discounts,
+    // marketing or segmentation (hard rules 1 and 5). One live row per badge.
+    // The weekly goal itself lives in app_state ('tracker.weeklyGoal').
+    sql: `
+CREATE TABLE IF NOT EXISTS user_badges (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT,
+  badge_id TEXT NOT NULL,
+  earned_at TEXT NOT NULL,
+  source_ref TEXT,
+  ${syncColumns}
+);
+CREATE UNIQUE INDEX IF NOT EXISTS user_badges_badge_uq ON user_badges(badge_id) WHERE deleted_at IS NULL;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations[migrations.length - 1]?.version ?? 0;

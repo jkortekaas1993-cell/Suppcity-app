@@ -1,19 +1,23 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useRepositories, type Exercise } from '@/lib/db';
 import type { SetType } from '@/lib/db/types';
-import { Button, Card, Text, useTheme } from '@/ui';
+import { Button, Card, Chip, EmptyState, haptics, Icon, IconButton, LiveDot, Ring, Text, useTheme } from '@/ui';
 
 import { useActiveWorkout, useActiveWorkoutActions } from '../activeWorkoutStore';
-import { Chip, IconButton, NumberField, Row, TextField } from '../components/primitives';
-import { StackScreen } from '../components/StackScreen';
+import { EQUIPMENT_LABELS_NL, MUSCLE_LABELS_NL } from '../components/labels';
+import { NumberField, TextField } from '../components/primitives';
+import { useFocusQuery } from '../components/useFocusQuery';
 import { completedSetCount, type ActiveExercise, type ActiveSet } from '../logic/activeWorkoutReducer';
 import { formatCountdown, formatElapsed, formatNumberNl } from '../logic/format';
 import { formatRepRange } from '../logic/routines';
+import { workoutVolumeKg } from '../logic/summaryView';
 
 /**
- * Full-screen active workout. Training only: no commercial elements here
+ * Full-screen active workout (Workout.dc.html). Training only: no commercial elements here
  * (hard rule; see CLAUDE.md "Trainen ... 100% free of ads and the shop").
  */
 
@@ -22,123 +26,278 @@ const SET_TYPE_ORDER: SetType[] = ['normal', 'warmup', 'dropset', 'failure'];
 const SET_TYPE_SHORT: Record<SetType, string> = { normal: '', warmup: 'W', dropset: 'D', failure: 'F' };
 const SET_TYPE_NAMES: Record<SetType, string> = { normal: 'normaal', warmup: 'warming-up', dropset: 'dropset', failure: 'tot falen' };
 
+/** Column widths of the set grid (mockup: 36 · 1fr · 64 · 52 · 44). */
+const COL = { set: 36, kg: 64, reps: 52, check: 44 } as const;
+const ROW_PAD = 14;
+
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [active]);
   return now;
 }
 
+function restLabel(seconds: number): string {
+  return seconds > 0 ? `Rust ${formatElapsed(seconds * 1000)}` : 'Rust uit';
+}
+
+function spokenDuration(ms: number): string {
+  const total = Math.ceil(Math.max(0, ms) / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  const parts = [];
+  if (m > 0) parts.push(`${m} ${m === 1 ? 'minuut' : 'minuten'}`);
+  if (s > 0 || m === 0) parts.push(`${s} ${s === 1 ? 'seconde' : 'seconden'}`);
+  return parts.join(' ');
+}
+
+function previousText(prev: { weightKg: number | null; reps: number | null } | undefined): string {
+  if (!prev || (prev.weightKg === null && prev.reps === null)) return '–';
+  return `${formatNumberNl(prev.weightKg ?? 0, 2)} × ${prev.reps ?? '–'}`;
+}
+
+/** 36pt check box; afgevinkt = accent fill with an SVG check. Hit area 48. */
+function CheckBox({ done, label, onPress }: { done: boolean; label: string; onPress: () => void }) {
+  const { colors, radius } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: done }}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => ({
+        width: 36,
+        height: 36,
+        borderRadius: radius.sm,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: done ? (pressed ? colors.accentPressed : colors.accent) : pressed ? colors.bg3 : colors.bg2,
+        borderWidth: done ? 0 : 1,
+        borderColor: colors.borderStrong,
+      })}
+    >
+      {done ? <Icon name="check" size={18} color={colors.onAccent} strokeWidth={3} /> : null}
+    </Pressable>
+  );
+}
+
 function SetRow({ exercise, set, index }: { exercise: ActiveExercise; set: ActiveSet; index: number }) {
   const actions = useActiveWorkoutActions();
-  const { colors, space, radius } = useTheme();
+  const { colors, layout, space } = useTheme();
   const done = set.completedAt !== null;
   const prev = exercise.previous[index];
   const workingNumber = exercise.sets.slice(0, index + 1).filter((s) => s.setType !== 'warmup').length;
   const label = SET_TYPE_SHORT[set.setType] || String(workingNumber);
   const nextType = SET_TYPE_ORDER[(SET_TYPE_ORDER.indexOf(set.setType) + 1) % SET_TYPE_ORDER.length] ?? 'normal';
+  const name = `Set ${index + 1}`;
+
+  const confirmRemove = () =>
+    Alert.alert(`${name} verwijderen?`, undefined, [
+      { text: 'Annuleren', style: 'cancel' },
+      { text: 'Verwijderen', style: 'destructive', onPress: () => actions.removeSet(set.id) },
+    ]);
 
   return (
     <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: space.xs,
-        paddingVertical: space.xxs,
-        paddingHorizontal: space.xxs,
-        borderRadius: radius.sm,
-        backgroundColor: done ? colors.surfaceRaised : 'transparent',
+        gap: space.sm,
+        minHeight: layout.setRowHeight,
+        paddingHorizontal: ROW_PAD,
+        backgroundColor: done ? colors.accentMuted : 'transparent',
+        borderTopWidth: index === 0 ? 0 : 1,
+        borderTopColor: done ? colors.bg0 : colors.border,
       }}
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Set ${index + 1}, type ${SET_TYPE_NAMES[set.setType]}. Tik om te wijzigen`}
-        // Cycle normal → warmup → dropset → failure.
-        onPress={() => actions.updateSet(set.id, { setType: nextType })}
-        style={{ width: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
+        accessibilityLabel={`${name}, type ${SET_TYPE_NAMES[set.setType]}`}
+        accessibilityHint="Tik om het type te wijzigen. Lang drukken om de set te verwijderen."
+        accessibilityActions={[
+          { name: 'activate', label: 'Type wijzigen' },
+          { name: 'delete', label: 'Set verwijderen' },
+        ]}
+        onAccessibilityAction={(e: { nativeEvent: { actionName: string } }) => {
+          if (e.nativeEvent.actionName === 'delete') confirmRemove();
+          else actions.updateSet(set.id, { setType: nextType });
+        }}
+        onPress={() => {
+          haptics.selection();
+          actions.updateSet(set.id, { setType: nextType });
+        }}
+        onLongPress={confirmRemove}
+        style={{ width: COL.set, minHeight: 48, justifyContent: 'center' }}
       >
-        <Text variant="heading" tone={set.setType === 'normal' ? 'default' : 'accent'}>
+        <Text
+          variant="bodyStrong"
+          tone={set.setType === 'normal' ? 'default' : 'tertiary'}
+          tnum
+          style={{ fontSize: set.setType === 'normal' ? 15 : 13 }}
+        >
           {label}
         </Text>
       </Pressable>
       <Text
-        variant="caption"
-        tone="muted"
+        tone="tertiary"
+        tnum
         numberOfLines={1}
-        style={{ width: 68, textAlign: 'center', fontVariant: ['tabular-nums'] }}
-        accessibilityLabel={prev ? `Vorige keer ${prev.weightKg ?? 0} kilo, ${prev.reps ?? 0} herhalingen` : 'Geen vorige waarde'}
+        style={{ flex: 1, fontSize: 14 }}
+        accessibilityLabel={
+          prev && (prev.weightKg !== null || prev.reps !== null)
+            ? `Vorige keer ${formatNumberNl(prev.weightKg ?? 0, 2)} kilo, ${prev.reps ?? 0} herhalingen`
+            : 'Geen vorige waarde'
+        }
       >
-        {prev && (prev.weightKg !== null || prev.reps !== null)
-          ? `${formatNumberNl(prev.weightKg ?? 0, 2)} × ${prev.reps ?? '–'}`
-          : '–'}
+        {previousText(prev)}
       </Text>
-      <NumberField
-        accessibilityLabel={`Gewicht set ${index + 1} in kilo`}
-        value={set.weightKg}
-        decimals={2}
-        placeholder={prev?.weightKg != null ? formatNumberNl(prev.weightKg, 2) : 'kg'}
-        onChange={(v) => actions.updateSet(set.id, { weightKg: v })}
-        done={done}
-      />
-      <NumberField
-        accessibilityLabel={`Herhalingen set ${index + 1}`}
-        value={set.reps}
-        decimals={0}
-        placeholder={prev?.reps != null ? String(prev.reps) : 'reps'}
-        onChange={(v) => actions.updateSet(set.id, { reps: v })}
-        done={done}
-      />
-      <IconButton
-        glyph="✓"
-        label={done ? `Set ${index + 1} niet meer afvinken` : `Set ${index + 1} afvinken`}
-        active={done}
-        onPress={() => actions.toggleSet(set.id)}
-      />
-      <IconButton glyph="×" label={`Set ${index + 1} verwijderen`} tone="danger" onPress={() => actions.removeSet(set.id)} />
+      <View style={{ width: COL.kg, alignItems: 'flex-end' }}>
+        <NumberField
+          accessibilityLabel={`Gewicht ${name.toLowerCase()} in kilo`}
+          value={set.weightKg}
+          decimals={2}
+          align="right"
+          placeholder={prev?.weightKg != null ? formatNumberNl(prev.weightKg, 2) : 'kg'}
+          onChange={(v) => actions.updateSet(set.id, { weightKg: v })}
+          done={done}
+          style={{ width: 60 }}
+        />
+      </View>
+      <View style={{ width: COL.reps, alignItems: 'flex-end' }}>
+        <NumberField
+          accessibilityLabel={`Herhalingen ${name.toLowerCase()}`}
+          value={set.reps}
+          decimals={0}
+          align="right"
+          placeholder={prev?.reps != null ? String(prev.reps) : '–'}
+          onChange={(v) => actions.updateSet(set.id, { reps: v })}
+          done={done}
+          style={{ width: 48 }}
+        />
+      </View>
+      <View style={{ width: COL.check, alignItems: 'center' }}>
+        <CheckBox
+          done={done}
+          label={done ? `${name} niet meer afvinken` : `${name} afvinken`}
+          onPress={() => {
+            haptics.medium();
+            actions.toggleSet(set.id);
+          }}
+        />
+      </View>
     </View>
   );
 }
 
-function ExerciseBlock({ exercise }: { exercise: ActiveExercise }) {
+function ColumnHeader() {
+  const { space } = useTheme();
+  const head = (label: string, width: number | undefined, align: 'left' | 'right' = 'left') => (
+    <Text variant="eyebrow" tone="tertiary" align={align} style={width ? { width, letterSpacing: 1.2 } : { flex: 1, letterSpacing: 1.2 }}>
+      {label}
+    </Text>
+  );
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{ flexDirection: 'row', gap: space.sm, paddingHorizontal: ROW_PAD, paddingBottom: space.xs + 2 }}
+    >
+      {head('Set', COL.set)}
+      {head('Vorige', undefined)}
+      {head('kg', COL.kg, 'right')}
+      {head('Reps', COL.reps, 'right')}
+      <View style={{ width: COL.check }} />
+    </View>
+  );
+}
+
+function ExerciseCard({
+  exercise,
+  meta,
+  open,
+  onToggle,
+}: {
+  exercise: ActiveExercise;
+  meta: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const actions = useActiveWorkoutActions();
   const router = useRouter();
-  const { space } = useTheme();
+  const { colors, space } = useTheme();
   const [showRest, setShowRest] = useState(false);
-  const range = formatRepRange(exercise.targetRepsMin, exercise.targetRepsMax);
+  const doneCount = exercise.sets.filter((s) => s.completedAt !== null).length;
+  const firstPrev = exercise.previous[0];
+
+  if (!open) {
+    const summary =
+      doneCount > 0
+        ? `${doneCount} van ${exercise.sets.length} sets klaar`
+        : `${exercise.sets.length} set${exercise.sets.length === 1 ? '' : 's'}${firstPrev ? ` · vorige keer ${previousText(firstPrev)}` : ''}`;
+    return (
+      <Card onPress={onToggle} accessibilityLabel={`${exercise.name}, ${summary}`} accessibilityHint="Tik om sets te loggen">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
+            <Text variant="heading">{exercise.name}</Text>
+            <Text variant="caption" tone="tertiary" tnum>
+              {summary}
+            </Text>
+          </View>
+          {doneCount > 0 && doneCount === exercise.sets.length ? (
+            <Icon name="check" size={20} color={colors.accentText} strokeWidth={2.5} />
+          ) : (
+            <Icon name="chevron-right" size={20} color={colors.text3} />
+          )}
+        </View>
+      </Card>
+    );
+  }
+
+  const more = () =>
+    Alert.alert(exercise.name, undefined, [
+      { text: showRest ? 'Rusttijd verbergen' : 'Rusttijd instellen', onPress: () => setShowRest((v) => !v) },
+      { text: 'Oefening bekijken', onPress: () => router.push(`/exercise/${encodeURIComponent(exercise.exerciseId)}`) },
+      {
+        text: 'Oefening verwijderen',
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert('Oefening verwijderen?', `${exercise.name} en de sets hiervan worden uit deze training gehaald.`, [
+            { text: 'Annuleren', style: 'cancel' },
+            { text: 'Verwijderen', style: 'destructive', onPress: () => actions.removeExercise(exercise.exerciseId) },
+          ]),
+      },
+      { text: 'Annuleren', style: 'cancel' },
+    ]);
 
   return (
-    <Card>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+    <Card padding={0} gap={0}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingLeft: ROW_PAD, paddingRight: space.xs, paddingTop: space.sm }}>
         <Pressable
-          style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}
-          accessibilityRole="link"
-          onPress={() => router.push(`/exercise/${encodeURIComponent(exercise.exerciseId)}`)}
+          accessibilityRole="button"
+          accessibilityLabel={`${exercise.name}, ${meta}`}
+          accessibilityHint="Tik om in te klappen"
+          onPress={onToggle}
+          style={{ flex: 1, minHeight: 48, paddingTop: space.xs + 2, paddingBottom: space.sm + 2, gap: space.xxs }}
         >
-          <Text variant="heading" tone="accent">
-            {exercise.name}
-          </Text>
-          <Text variant="caption" tone="muted">
-            {range ? `Doel ${range} reps · ` : ''}Rust {exercise.restSeconds > 0 ? formatElapsed(exercise.restSeconds * 1000) : 'uit'}
+          <Text variant="heading">{exercise.name}</Text>
+          <Text variant="caption" tone="tertiary" tnum>
+            {meta}
           </Text>
         </Pressable>
-        <IconButton glyph="◷" label="Rusttijd instellen" active={showRest} onPress={() => setShowRest((v) => !v)} />
-        <IconButton
-          glyph="⋯"
-          label="Oefening verwijderen"
-          onPress={() =>
-            Alert.alert('Oefening verwijderen?', `${exercise.name} en de sets hiervan worden uit deze training gehaald.`, [
-              { text: 'Annuleren', style: 'cancel' },
-              { text: 'Verwijderen', style: 'destructive', onPress: () => actions.removeExercise(exercise.exerciseId) },
-            ])
-          }
-        />
+        <IconButton icon="more" accessibilityLabel={`Meer opties voor ${exercise.name}`} onPress={more} />
       </View>
 
       {showRest ? (
-        <Row>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: space.sm, paddingHorizontal: ROW_PAD, paddingBottom: space.md }}
+        >
           {REST_OPTIONS.map((s) => (
             <Chip
               key={s}
@@ -147,85 +306,103 @@ function ExerciseBlock({ exercise }: { exercise: ActiveExercise }) {
               onPress={() => actions.setRestSeconds(exercise.exerciseId, s)}
             />
           ))}
-        </Row>
+        </ScrollView>
       ) : null}
 
-      <View style={{ flexDirection: 'row', gap: space.xs, paddingHorizontal: space.xxs }}>
-        <Text variant="label" tone="muted" style={{ width: 32, textAlign: 'center' }}>
-          Set
-        </Text>
-        <Text variant="label" tone="muted" style={{ width: 68, textAlign: 'center' }}>
-          Vorige
-        </Text>
-        <Text variant="label" tone="muted" style={{ flex: 1, textAlign: 'center' }}>
-          Kg
-        </Text>
-        <Text variant="label" tone="muted" style={{ flex: 1, textAlign: 'center' }}>
-          Reps
-        </Text>
-        <View style={{ width: 48 * 2 + space.xs }} />
-      </View>
-
+      <ColumnHeader />
       {exercise.sets.map((set, i) => (
         <SetRow key={set.id} exercise={exercise} set={set} index={i} />
       ))}
 
-      <Button label="+ Set toevoegen" variant="ghost" fullWidth onPress={() => actions.addSet(exercise.exerciseId)} />
+      <View style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+        <Button label="+ Set toevoegen" variant="link" fullWidth onPress={() => actions.addSet(exercise.exerciseId)} />
+      </View>
     </Card>
   );
 }
 
-function RestPanel({ restEndsAt, now }: { restEndsAt: number; now: number }) {
+function RestBar({ restEndsAt, total, now }: { restEndsAt: number; total: number; now: number }) {
   const actions = useActiveWorkoutActions();
-  const { space } = useTheme();
+  const { colors, radius, space } = useTheme();
+  const left = Math.max(0, restEndsAt - now);
+  const progress = total > 0 ? left / (total * 1000) : 0;
   return (
-    <Card highlighted eyebrow="Rust">
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Text variant="metric" style={{ flex: 1 }} accessibilityLiveRegion="polite">
-          {formatCountdown(restEndsAt - now)}
+    <View
+      style={{
+        marginHorizontal: space.lg,
+        marginBottom: space.sm,
+        marginTop: space.xs,
+        paddingVertical: space.md + 2,
+        paddingHorizontal: space.lg,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: colors.accentBorder,
+        backgroundColor: colors.bg1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.lg,
+      }}
+    >
+      <Ring progress={progress} size={64} accessibilityLabel={`Rusttimer, ${spokenDuration(left)} over`} />
+      <View style={{ flex: 1 }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <Text variant="eyebrow" tone="accent">
+          Rust
         </Text>
-        <IconButton glyph="−15" label="15 seconden minder rust" onPress={() => actions.adjustRest(-15)} />
-        <IconButton glyph="+15" label="15 seconden meer rust" onPress={() => actions.adjustRest(15)} />
-        <Button label="Overslaan" variant="secondary" onPress={() => actions.skipRest()} />
+        <Text variant="heading" tnum style={{ fontSize: 32, lineHeight: 36 }} maxFontSizeMultiplier={1.2}>
+          {formatCountdown(left)}
+        </Text>
       </View>
-    </Card>
+      <Button label="+30 s" variant="secondary" size="sm" haptic="selection" onPress={() => actions.adjustRest(30)} accessibilityLabel="30 seconden meer rust" />
+      <Button label="Skip" variant="ghost" size="sm" onPress={() => actions.skipRest()} accessibilityLabel="Rust overslaan" />
+    </View>
   );
 }
 
 export function ActiveWorkoutScreen() {
   const workout = useActiveWorkout();
   const actions = useActiveWorkoutActions();
+  const repos = useRepositories();
   const router = useRouter();
-  const { space } = useTheme();
+  const { colors, space } = useTheme();
   const now = useNow(workout !== null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [openState, setOpenState] = useState<Record<string, boolean>>({});
+
+  const loadExercises = useCallback(async () => new Map<string, Exercise>((await repos.exercises.list()).map((e) => [e.id, e])), [repos]);
+  const { data: library } = useFocusQuery(loadExercises);
+
+  const minimise = () => (router.canGoBack() ? router.back() : router.replace('/vandaag'));
 
   if (!workout) {
     return (
-      <StackScreen title="Training">
-        <Card eyebrow="Geen actieve training">
-          <Text tone="muted">Start een lege training of kies een routine onder Trainen.</Text>
-          <Button
-            label="Lege training starten"
-            onPress={() => {
-              void actions.startEmpty();
-            }}
-          />
-        </Card>
-      </StackScreen>
+      <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg0, padding: space.xl, gap: space.lg }}>
+        <IconButton icon="chevron-down" accessibilityLabel="Sluiten" onPress={minimise} />
+        <EmptyState
+          icon="dumbbell"
+          title="Geen actieve training"
+          body="Start een lege training of kies een routine onder Trainen."
+          action={{ label: 'Lege training starten', onPress: () => void actions.startEmpty() }}
+        />
+      </SafeAreaView>
     );
   }
 
   const done = completedSetCount(workout);
   const resting = workout.restEndsAt !== null && workout.restEndsAt > now;
+  const volume = workoutVolumeKg(workout.exercises);
+  // The "current" exercise (first with an open set) is expanded unless the user chose otherwise.
+  const currentId = workout.exercises.find((e) => e.sets.some((s) => s.completedAt === null))?.exerciseId ?? workout.exercises[0]?.exerciseId;
 
   const finish = async () => {
     setBusy(true);
     try {
       const id = await actions.finish();
-      if (id) router.replace(`/workout/${id}?klaar=1`);
+      if (id) {
+        haptics.medium();
+        router.replace(`/workout/${id}?klaar=1`);
+      }
     } finally {
       setBusy(false);
     }
@@ -239,7 +416,7 @@ export function ActiveWorkoutScreen() {
           text: 'Verwijderen',
           style: 'destructive',
           onPress: () => {
-            void actions.discard().then(() => router.back());
+            void actions.discard().then(minimise);
           },
         },
       ]);
@@ -263,69 +440,113 @@ export function ActiveWorkoutScreen() {
         text: 'Verwijderen',
         style: 'destructive',
         onPress: () => {
-          void actions.discard().then(() => router.back());
+          void actions.discard().then(minimise);
         },
       },
     ]);
 
+  const metaFor = (e: ActiveExercise): string => {
+    const ex = library?.get(e.exerciseId);
+    const range = formatRepRange(e.targetRepsMin, e.targetRepsMax);
+    const parts: string[] = [];
+    if (ex) parts.push(EQUIPMENT_LABELS_NL[ex.equipment], MUSCLE_LABELS_NL[ex.primary_muscle]);
+    if (range) parts.push(`${range} reps`);
+    parts.push(restLabel(e.restSeconds));
+    return parts.join(' · ');
+  };
+
+  const commitTitle = () => {
+    actions.rename(title);
+    setEditingTitle(false);
+  };
+
   return (
-    <StackScreen
-      title={formatElapsed(now - workout.startedAt)}
-      right={<IconButton glyph="×" label="Training verwijderen" tone="danger" onPress={confirmDiscard} />}
-      footer={
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
-          <View style={{ flex: 1 }}>
-            <Button label="Oefening toevoegen" variant="secondary" fullWidth onPress={() => router.push('/exercise/picker')} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button label="Afronden" fullWidth loading={busy} onPress={confirmFinish} />
-          </View>
-        </View>
-      }
-    >
-      {editingTitle ? (
-        <TextField
-          autoFocus
-          value={title}
-          onChangeText={setTitle}
-          accessibilityLabel="Naam van de training"
-          returnKeyType="done"
-          onSubmitEditing={() => {
-            actions.rename(title);
-            setEditingTitle(false);
-          }}
-          onBlur={() => {
-            actions.rename(title);
-            setEditingTitle(false);
-          }}
-        />
-      ) : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityHint="Tik om de naam te wijzigen"
-          onPress={() => {
-            setTitle(workout.title);
-            setEditingTitle(true);
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.bg0 }}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.sm,
+            paddingHorizontal: space.md,
+            paddingTop: space.xs,
+            paddingBottom: space.md,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
           }}
         >
-          <Text variant="title">{workout.title}</Text>
-          <Text variant="caption" tone="muted">
-            {done} set{done === 1 ? '' : 's'} afgevinkt
-          </Text>
-        </Pressable>
-      )}
+          <IconButton icon="chevron-down" accessibilityLabel="Minimaliseren" onPress={minimise} color={colors.text2} />
+          <View style={{ flex: 1, alignItems: 'center', gap: space.xxs }}>
+            {editingTitle ? (
+              <TextField
+                autoFocus
+                value={title}
+                onChangeText={setTitle}
+                accessibilityLabel="Naam van de training"
+                returnKeyType="done"
+                onSubmitEditing={commitTitle}
+                onBlur={commitTitle}
+                style={{ alignSelf: 'stretch', textAlign: 'center' }}
+              />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Training ${workout.title}`}
+                accessibilityHint="Tik om de naam te wijzigen"
+                onPress={() => {
+                  setTitle(workout.title);
+                  setEditingTitle(true);
+                }}
+                style={{ minHeight: 28, justifyContent: 'center' }}
+              >
+                <Text variant="title" numberOfLines={1} style={{ fontSize: 22, lineHeight: 26 }}>
+                  {workout.title}
+                </Text>
+              </Pressable>
+            )}
+            <View
+              accessible
+              accessibilityLabel={`Bezig, ${formatElapsed(now - workout.startedAt)}, ${formatNumberNl(volume, 0)} kilo volume, ${done} sets afgevinkt`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 }}
+            >
+              <LiveDot size={7} />
+              <Text variant="caption" tone="secondary" tnum>
+                {formatElapsed(now - workout.startedAt)} · {formatNumberNl(volume, 0)} kg
+              </Text>
+            </View>
+          </View>
+          <Button label="Klaar" size="sm" loading={busy} onPress={confirmFinish} accessibilityLabel="Training afronden" />
+        </View>
 
-      {resting && workout.restEndsAt !== null ? <RestPanel restEndsAt={workout.restEndsAt} now={now} /> : null}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          indicatorStyle="white"
+          contentContainerStyle={{ padding: space.lg, gap: space.md + 2, paddingBottom: space.xxl }}
+        >
+          {workout.exercises.length === 0 ? (
+            <EmptyState icon="dumbbell" title="Nog geen oefeningen" body="Voeg je eerste oefening toe om sets te loggen." />
+          ) : null}
 
-      {workout.exercises.length === 0 ? (
-        <Card>
-          <Text tone="muted">Voeg je eerste oefening toe om sets te loggen.</Text>
-        </Card>
-      ) : null}
+          {workout.exercises.map((e) => (
+            <ExerciseCard
+              key={e.exerciseId}
+              exercise={e}
+              meta={metaFor(e)}
+              open={openState[e.exerciseId] ?? e.exerciseId === currentId}
+              onToggle={() =>
+                setOpenState((prev) => ({ ...prev, [e.exerciseId]: !(prev[e.exerciseId] ?? e.exerciseId === currentId) }))
+              }
+            />
+          ))}
 
-      {workout.exercises.map((e) => (
-        <ExerciseBlock key={e.exerciseId} exercise={e} />
-      ))}
-    </StackScreen>
+          <Button label="Oefening toevoegen" icon="plus" variant="secondary" fullWidth onPress={() => router.push('/exercise/picker')} />
+          <Button label="Training verwijderen" variant="ghost" fullWidth onPress={confirmDiscard} />
+        </ScrollView>
+
+        {resting && workout.restEndsAt !== null ? (
+          <RestBar restEndsAt={workout.restEndsAt} total={workout.restDurationSeconds ?? 0} now={now} />
+        ) : null}
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

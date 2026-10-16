@@ -35,12 +35,12 @@ export function NotificationOptInCard({ onDone }: { onDone: (prefs: Notification
 
   return (
     <Card eyebrow="Meldingen">
-      <Text>Wil je meldingen? Kies zelf welke. Je kunt dit later altijd aanpassen in de instellingen van je telefoon.</Text>
+      <Text tone="secondary">Wil je meldingen? Kies zelf welke. Je kunt dit later altijd aanpassen in de instellingen van je telefoon.</Text>
       {OPTIONS.map((o) => (
         <View key={o.key} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 48 }}>
           <View style={{ flex: 1, gap: space.xxs }}>
-            <Text variant="heading">{o.title}</Text>
-            <Text variant="caption" tone="muted">
+            <Text variant="bodyStrong">{o.title}</Text>
+            <Text variant="caption" tone="tertiary">
               {o.body}
             </Text>
           </View>
@@ -49,7 +49,7 @@ export function NotificationOptInCard({ onDone }: { onDone: (prefs: Notification
             value={choices[o.key]}
             disabled={busy}
             onValueChange={(v) => setChoices((c) => ({ ...c, [o.key]: v }))}
-            trackColor={{ true: colors.accent, false: colors.border }}
+            trackColor={{ true: colors.accent, false: colors.bg3 }}
           />
         </View>
       ))}

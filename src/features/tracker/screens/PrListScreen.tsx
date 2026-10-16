@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
 import { useRepositories } from '@/lib/db';
-import { ListItem, Text } from '@/ui';
+import { Card, ListRow, Text } from '@/ui';
 
 import { StackScreen } from '../components/StackScreen';
 import { useFocusQuery } from '../components/useFocusQuery';
@@ -17,16 +17,22 @@ export function PrListScreen() {
 
   return (
     <StackScreen title="Records">
-      {data && data.length === 0 ? <Text tone="muted">Rond een training af om je records te zien.</Text> : null}
-      {(data ?? []).map((r) => (
-        <ListItem
-          key={r.exerciseId}
-          title={r.name}
-          subtitle={`${r.heaviest} · laatst ${formatDateNl(r.lastAt)}`}
-          value={r.e1rm}
-          onPress={() => router.push(`/exercise/${encodeURIComponent(r.exerciseId)}`)}
-        />
-      ))}
+      {data && data.length === 0 ? <Text tone="secondary">Rond een training af om je records te zien.</Text> : null}
+      {data && data.length > 0 ? (
+        <Card padding={0} gap={0}>
+          {data.map((r, i) => (
+            <ListRow
+              key={r.exerciseId}
+              title={r.name}
+              subtitle={`${r.heaviest} · laatst ${formatDateNl(r.lastAt)}`}
+              value={r.e1rm}
+              leading="trophy"
+              divider={i < data.length - 1}
+              onPress={() => router.push(`/exercise/${encodeURIComponent(r.exerciseId)}`)}
+            />
+          ))}
+        </Card>
+      ) : null}
     </StackScreen>
   );
 }

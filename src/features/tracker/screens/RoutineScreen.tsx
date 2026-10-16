@@ -1,12 +1,12 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { useRepositories, type Exercise, type NewRow, type RoutineExercise } from '@/lib/db';
-import { Button, Card, Text, useTheme } from '@/ui';
+import { Button, Card, IconButton, Text, useTheme } from '@/ui';
 
 import { useActiveWorkout, useActiveWorkoutActions } from '../activeWorkoutStore';
-import { IconButton, NumberField, TextField } from '../components/primitives';
+import { LabeledField, NumberField, TextField } from '../components/primitives';
 import { StackScreen } from '../components/StackScreen';
 import { formatElapsed } from '../logic/format';
 import { formatRepRange } from '../logic/routines';
@@ -22,7 +22,7 @@ export function RoutineScreen() {
   const router = useRouter();
   const active = useActiveWorkout();
   const actions = useActiveWorkoutActions();
-  const { space } = useTheme();
+  const { colors, space } = useTheme();
 
   const [name, setName] = useState('');
   const [programSlug, setProgramSlug] = useState<string | null>(null);
@@ -154,17 +154,19 @@ export function RoutineScreen() {
   return (
     <StackScreen
       title={isNew ? 'Nieuwe routine' : editing ? 'Routine bewerken' : name}
+      eyebrow={!isNew && !editing && programSlug ? 'Uit een kant-en-klaar schema' : undefined}
+      subtitle={!isNew && !editing ? `${items.length} oefening${items.length === 1 ? '' : 'en'}` : undefined}
       right={
-        !isNew && !editing ? (
-          <IconButton glyph="✎" label="Routine bewerken" onPress={() => setEditing(true)} />
-        ) : undefined
+        !isNew && !editing ? <Button label="Bewerken" variant="link" size="sm" onPress={() => setEditing(true)} /> : undefined
       }
       footer={
         editing ? (
-          <Button label="Opslaan" fullWidth loading={saving} onPress={() => void save()} />
+          <Button label="Opslaan" size="lg" fullWidth loading={saving} onPress={() => void save()} />
         ) : (
           <Button
             label={active ? 'Naar actieve training' : 'Start deze routine'}
+            icon="play"
+            size="lg"
             fullWidth
             disabled={items.length === 0}
             onPress={() => void start()}
@@ -174,11 +176,9 @@ export function RoutineScreen() {
     >
       {editing ? (
         <TextField value={name} onChangeText={setName} placeholder="Naam van de routine" accessibilityLabel="Naam van de routine" />
-      ) : programSlug ? (
-        <Text tone="muted">Uit een kant-en-klaar schema.</Text>
       ) : null}
 
-      {items.length === 0 ? <Text tone="muted">Nog geen oefeningen.</Text> : null}
+      {items.length === 0 ? <Text tone="secondary">Nog geen oefeningen.</Text> : null}
 
       {items.map((item, i) => (
         <Card key={`${item.exercise_id}-${i}`}>
@@ -188,12 +188,22 @@ export function RoutineScreen() {
             </Text>
             {editing ? (
               <>
-                <IconButton glyph="↑" label="Omhoog" disabled={i === 0} onPress={() => move(i, -1)} />
-                <IconButton glyph="↓" label="Omlaag" disabled={i === items.length - 1} onPress={() => move(i, 1)} />
                 <IconButton
-                  glyph="×"
-                  label="Verwijderen"
-                  tone="danger"
+                  icon="chevron-up"
+                  accessibilityLabel={`${item.name} omhoog`}
+                  disabled={i === 0}
+                  onPress={() => move(i, -1)}
+                />
+                <IconButton
+                  icon="chevron-down"
+                  accessibilityLabel={`${item.name} omlaag`}
+                  disabled={i === items.length - 1}
+                  onPress={() => move(i, 1)}
+                />
+                <IconButton
+                  icon="trash"
+                  accessibilityLabel={`${item.name} verwijderen`}
+                  color={colors.error}
                   onPress={() => setItems((prev) => prev.filter((_, j) => j !== i))}
                 />
               </>
@@ -201,26 +211,27 @@ export function RoutineScreen() {
           </View>
           {editing ? (
             <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
-              <Field label="Sets">
+              <LabeledField label="Sets">
                 <NumberField
+                  style={{ flex: 1 }}
                   value={item.target_sets}
                   decimals={0}
                   accessibilityLabel="Aantal sets"
                   onChange={(v) => patch(i, { target_sets: Math.max(1, v ?? 1) })}
                 />
-              </Field>
-              <Field label="Reps min">
-                <NumberField value={item.target_reps_min} decimals={0} accessibilityLabel="Minimaal aantal herhalingen" onChange={(v) => patch(i, { target_reps_min: v })} />
-              </Field>
-              <Field label="Reps max">
-                <NumberField value={item.target_reps_max} decimals={0} accessibilityLabel="Maximaal aantal herhalingen" onChange={(v) => patch(i, { target_reps_max: v })} />
-              </Field>
-              <Field label="Rust (s)">
-                <NumberField value={item.rest_seconds} decimals={0} accessibilityLabel="Rust in seconden" onChange={(v) => patch(i, { rest_seconds: Math.max(0, v ?? 0) })} />
-              </Field>
+              </LabeledField>
+              <LabeledField label="Reps min">
+                <NumberField style={{ flex: 1 }} value={item.target_reps_min} decimals={0} accessibilityLabel="Minimaal aantal herhalingen" onChange={(v) => patch(i, { target_reps_min: v })} />
+              </LabeledField>
+              <LabeledField label="Reps max">
+                <NumberField style={{ flex: 1 }} value={item.target_reps_max} decimals={0} accessibilityLabel="Maximaal aantal herhalingen" onChange={(v) => patch(i, { target_reps_max: v })} />
+              </LabeledField>
+              <LabeledField label="Rust (s)">
+                <NumberField style={{ flex: 1 }} value={item.rest_seconds} decimals={0} accessibilityLabel="Rust in seconden" onChange={(v) => patch(i, { rest_seconds: Math.max(0, v ?? 0) })} />
+              </LabeledField>
             </View>
           ) : (
-            <Text tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+            <Text variant="caption" tone="tertiary" tnum>
               {item.target_sets} × {formatRepRange(item.target_reps_min, item.target_reps_max) || '–'} · rust{' '}
               {formatElapsed(item.rest_seconds * 1000)}
             </Text>
@@ -230,21 +241,10 @@ export function RoutineScreen() {
 
       {editing ? (
         <>
-          <Button label="+ Oefening toevoegen" variant="secondary" fullWidth onPress={() => router.push('/exercise/picker?mode=routine')} />
-          {!isNew ? <Button label="Routine verwijderen" variant="ghost" onPress={remove} /> : null}
+          <Button label="Oefening toevoegen" icon="plus" variant="secondary" fullWidth onPress={() => router.push('/exercise/picker?mode=routine')} />
+          {!isNew ? <Button label="Routine verwijderen" variant="danger" fullWidth onPress={remove} /> : null}
         </>
       ) : null}
     </StackScreen>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text variant="label" tone="muted" numberOfLines={1}>
-        {label}
-      </Text>
-      <View style={{ flexDirection: 'row' }}>{children}</View>
-    </View>
   );
 }
