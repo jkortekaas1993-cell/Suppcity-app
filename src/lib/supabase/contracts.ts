@@ -27,6 +27,7 @@ export const AuthExchangeResponse = z.object({
   user: z.object({ id: z.string().uuid() }),
   profile: z.object({ adultConfirmed: z.boolean(), isNewUser: z.boolean() }),
 });
+// eslint-disable-next-line @typescript-eslint/no-redeclare -- zod schema and its inferred type share one name
 export type AuthExchangeResponse = z.infer<typeof AuthExchangeResponse>;
 
 // POST delete-account (Authorization: Bearer <supabase access token>, empty body)
@@ -34,6 +35,7 @@ export const DeleteAccountResponse = z.object({
   confirmationId: z.string().uuid(),
   deletedAt: z.string(),
 });
+// eslint-disable-next-line @typescript-eslint/no-redeclare -- zod schema and its inferred type share one name
 export type DeleteAccountResponse = z.infer<typeof DeleteAccountResponse>;
 
 // POST redeem-points (Authorization: Bearer <supabase access token>)
@@ -51,6 +53,7 @@ export const RedeemPointsResponse = z.object({
   points: z.number().int(),
   expiresAt: z.string(),
 });
+// eslint-disable-next-line @typescript-eslint/no-redeclare -- zod schema and its inferred type share one name
 export type RedeemPointsResponse = z.infer<typeof RedeemPointsResponse>;
 
 export const FUNCTION_ERROR_CODES = [

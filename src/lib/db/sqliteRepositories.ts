@@ -194,10 +194,22 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     async update(id, patch) {
       const sets: string[] = [];
       const params: SqlValue[] = [];
-      if (patch.name !== undefined) (sets.push('name = ?'), params.push(patch.name));
-      if (patch.notes !== undefined) (sets.push('notes = ?'), params.push(patch.notes));
-      if (patch.position !== undefined) (sets.push('position = ?'), params.push(patch.position));
-      if (patch.program_slug !== undefined) (sets.push('program_slug = ?'), params.push(patch.program_slug));
+      if (patch.name !== undefined) {
+        sets.push('name = ?');
+        params.push(patch.name);
+      }
+      if (patch.notes !== undefined) {
+        sets.push('notes = ?');
+        params.push(patch.notes);
+      }
+      if (patch.position !== undefined) {
+        sets.push('position = ?');
+        params.push(patch.position);
+      }
+      if (patch.program_slug !== undefined) {
+        sets.push('program_slug = ?');
+        params.push(patch.program_slug);
+      }
       if (sets.length === 0) return;
       await db.runAsync(`UPDATE routines SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`, [...params, deps.now(), id]);
     },
@@ -275,8 +287,14 @@ export function createSqliteRepositories(db: SqlDb, deps: RepositoryDeps): Repos
     async update(id, patch) {
       const sets: string[] = [];
       const params: SqlValue[] = [];
-      if (patch.title !== undefined) (sets.push('title = ?'), params.push(patch.title));
-      if (patch.notes !== undefined) (sets.push('notes = ?'), params.push(patch.notes));
+      if (patch.title !== undefined) {
+        sets.push('title = ?');
+        params.push(patch.title);
+      }
+      if (patch.notes !== undefined) {
+        sets.push('notes = ?');
+        params.push(patch.notes);
+      }
       if (sets.length === 0) return;
       await db.runAsync(`UPDATE workouts SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`, [...params, deps.now(), id]);
     },
