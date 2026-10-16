@@ -16,14 +16,18 @@ enable_confirmations = false
 
 # Credential = Shopify Customer Account token, verified inside the function.
 [functions.shopify-auth-exchange]
+import_map = "./functions/deno.json"
 verify_jwt = false
 
 [functions.delete-account]
+import_map = "./functions/deno.json"
 verify_jwt = true
 
 [functions.redeem-points]
+import_map = "./functions/deno.json"
 verify_jwt = true
 
 # Shopify calls this; authenticity = HMAC, verified inside the function.
 [functions.shopify-webhooks]
+import_map = "./functions/deno.json"
 verify_jwt = false
