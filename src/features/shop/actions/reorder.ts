@@ -1,31 +1,23 @@
 import { getStorefront, userMessageFor, type OrderSummary } from '@/lib/shopify';
 
-import { planReorder, reorderableVariantIds, skippedNotice } from '../logic/reorder';
+import { runReorder, singleVariantOrder, type ReorderDeps, type ReorderOutcome } from '../logic/reorderFlow';
 import { cartStore } from '../state/cartStore';
 
-export type ReorderOutcome = { ok: true; notice: string | null } | { ok: false; message: string };
+export type { ReorderOutcome } from '../logic/reorderFlow';
 
-/** Put the lines of a past order into a new cart, skipping what's sold out. */
-export async function reorder(order: Pick<OrderSummary, 'lines'>): Promise<ReorderOutcome> {
-  try {
-    const availability = await getStorefront().variantAvailability(reorderableVariantIds(order.lines));
-    const plan = planReorder(order.lines, availability);
-    const notice = skippedNotice(plan.skipped);
-    if (plan.lines.length === 0) {
-      return { ok: false, message: notice ?? 'Geen van deze producten is nu leverbaar.' };
-    }
-    const ok = await cartStore.replaceWith(plan.lines, notice);
-    return ok ? { ok: true, notice } : { ok: false, message: cartStore.get().error ?? 'Opnieuw bestellen lukte niet.' };
-  } catch (error) {
-    return { ok: false, message: userMessageFor(error) };
-  }
+const deps: ReorderDeps = {
+  availability: (ids) => getStorefront().variantAvailability(ids),
+  addToCart: (lines, notice) => cartStore.add(lines, notice),
+  cartError: () => cartStore.get().error,
+  errorMessage: userMessageFor,
+};
+
+/** Add the lines of a past order to the cart (the cart is never emptied). */
+export function reorder(order: Pick<OrderSummary, 'lines'>): Promise<ReorderOutcome> {
+  return runReorder(order, deps);
 }
 
-/** Reorder a single variant (stock counter card). */
-export async function reorderVariant(variantId: string): Promise<ReorderOutcome> {
-  return reorder({
-    lines: [
-      { id: variantId, title: '', variantTitle: null, quantity: 1, variantId, productId: null, image: null, total: null, isGiftCard: false },
-    ],
-  });
+/** Add a single variant to the cart (ReorderCard "Bestel" on Vandaag, stock counter). */
+export function reorderVariant(variantId: string): Promise<ReorderOutcome> {
+  return runReorder(singleVariantOrder(variantId), deps);
 }

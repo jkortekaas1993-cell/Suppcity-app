@@ -72,14 +72,16 @@ export const cartStore = {
     }
   },
 
-  add(lines: NewCartLine[]) {
+  /**
+   * Adds lines to the existing cart (restored first, so a not-yet-loaded cart is never
+   * replaced by a new one), or creates a cart. `notice`: info shown with the cart
+   * (e.g. skipped reorder lines). Used by "Bestel"/"Opnieuw bestellen" too: those never
+   * empty the cart.
+   */
+  async add(lines: NewCartLine[], notice: string | null = null) {
+    await cartStore.load();
     const current = store.get().cart;
-    return run(() => (current ? getStorefront().cartLinesAdd(current.id, lines) : createCart(lines)));
-  },
-
-  /** "Opnieuw bestellen" puts a past order into a NEW cart. */
-  replaceWith(lines: NewCartLine[], notice: string | null) {
-    return run(() => createCart(lines), notice);
+    return run(() => (current ? getStorefront().cartLinesAdd(current.id, lines) : createCart(lines)), notice);
   },
 
   setQuantity(line: Pick<CartLine, 'id' | 'quantity'>, quantity: number) {

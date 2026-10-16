@@ -1,6 +1,7 @@
 import type { VariantAvailability } from '@/lib/shopify/models';
 
 import { planReorder, reorderableVariantIds, skippedNotice } from '../logic/reorder';
+import { runReorder, singleVariantOrder } from '../logic/reorderFlow';
 
 const avail = (variantId: string, available: boolean, productTitle = 'P'): [string, VariantAvailability] => [
   variantId,
@@ -65,5 +66,48 @@ describe('planReorder', () => {
         { variantId: 'g', isGiftCard: true },
       ]),
     ).toEqual(['a']);
+  });
+});
+
+describe('runReorder: "Bestel" adds to the cart, never replaces it (review M4)', () => {
+  const availability = (ok: string[]) => async (ids: string[]) =>
+    new Map(ids.map((id): [string, VariantAvailability] => [id, { variantId: id, available: ok.includes(id), productTitle: id, variantTitle: '' }]));
+
+  it('adds the single variant to the existing cart', async () => {
+    const calls: unknown[] = [];
+    const res = await runReorder(singleVariantOrder('v9'), {
+      availability: availability(['v9']),
+      addToCart: async (lines, notice) => {
+        calls.push({ lines, notice });
+        return true;
+      },
+      cartError: () => null,
+      errorMessage: () => 'x',
+    });
+    expect(res).toEqual({ ok: true, notice: null });
+    expect(calls).toEqual([{ lines: [{ variantId: 'v9', quantity: 1 }], notice: null }]);
+  });
+
+  it('reports sold out without touching the cart, and maps errors', async () => {
+    let touched = false;
+    const deps = {
+      availability: availability([]),
+      addToCart: async () => {
+        touched = true;
+        return true;
+      },
+      cartError: () => null,
+      errorMessage: () => 'Geen verbinding.',
+    };
+    const res = await runReorder(singleVariantOrder('v1'), deps);
+    expect(res.ok).toBe(false);
+    expect(touched).toBe(false);
+    const failing = await runReorder(singleVariantOrder('v1'), {
+      ...deps,
+      availability: async () => {
+        throw new Error('offline');
+      },
+    });
+    expect(failing).toEqual({ ok: false, message: 'Geen verbinding.' });
   });
 });
