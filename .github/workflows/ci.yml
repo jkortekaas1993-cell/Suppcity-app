@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       # Hard rule 7: exact versions only (no ^ or ~ ranges).
       - name: Check pinned versions
         run: |
@@ -61,6 +62,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
-        run: npm run lint
+        run: |
+          if ! npm run lint -- -f json -o eslint.json; then
+            node -e "for (const f of require('./eslint.json')) for (const m of f.messages) console.log('::error file=' + f.filePath.replace(process.cwd() + '/', '') + ',line=' + (m.line || 1) + '::' + (m.ruleId || 'eslint') + ': ' + m.message)"
+            exit 1
+          fi
       - name: Test
         run: npm test
