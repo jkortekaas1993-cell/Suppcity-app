@@ -23,5 +23,5 @@ export const FONT_ASSETS = {
   [fontFamily.bold]: Barlow_700Bold,
 };
 
-/** After this long the app renders with the system font instead of waiting on the splash. */
+/** After this long the app renders with the system font instead of waiting for Barlow. */
 export const FONT_LOAD_TIMEOUT_MS = 2500;

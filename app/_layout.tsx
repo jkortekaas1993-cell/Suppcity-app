@@ -1,5 +1,5 @@
 import { useFonts } from 'expo-font';
-import { SplashScreen, Stack, type ErrorBoundaryProps } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text as RNText, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -7,10 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppServices } from '@/integration';
 import { DatabaseProvider } from '@/lib/db';
-import { FONT_ASSETS, FONT_LOAD_TIMEOUT_MS, ThemeProvider, useTheme } from '@/ui';
-
-// Keep the native splash up until Barlow is registered (or we give up waiting, see below).
-SplashScreen.preventAutoHideAsync().catch(() => undefined);
+import { colors as palette, FONT_ASSETS, FONT_LOAD_TIMEOUT_MS, ThemeProvider, useTheme } from '@/ui';
 
 function RootStack() {
   const { colors } = useTheme();
@@ -30,8 +27,8 @@ function RootStack() {
 }
 
 /**
- * Fonts gate: render as soon as the fonts loaded, failed, or FONT_LOAD_TIMEOUT_MS passed.
- * Without fonts the theme falls back to the system font, so the app never hangs on the splash.
+ * Fonts gate: render the app as soon as the fonts loaded, failed, or FONT_LOAD_TIMEOUT_MS passed.
+ * Without fonts the theme falls back to the system font, so the app never waits long on a blank screen.
  * If the fonts arrive after the timeout, the theme switches to Barlow on that render.
  */
 function useFontsReady(): { ready: boolean; fontsLoaded: boolean } {
@@ -42,15 +39,14 @@ function useFontsReady(): { ready: boolean; fontsLoaded: boolean } {
     return () => clearTimeout(id);
   }, []);
   const ready = loaded || error != null || timedOut;
-  useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => undefined);
-  }, [ready]);
   return { ready, fontsLoaded: loaded };
 }
 
 export default function RootLayout() {
   const { ready, fontsLoaded } = useFontsReady();
-  if (!ready) return null;
+  // No expo-splash-screen in this app (not a dependency): while the fonts load (at most
+  // FONT_LOAD_TIMEOUT_MS) show the app background, so there is no white flash.
+  if (!ready) return <View style={{ flex: 1, backgroundColor: palette.dark.bg0 }} />;
   return (
     <SafeAreaProvider>
       <ThemeProvider scheme="dark" fontsLoaded={fontsLoaded}>
