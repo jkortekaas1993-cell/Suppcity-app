@@ -26,10 +26,11 @@ jobs:
       - name: Add packages
         if: inputs.packages != ''
         run: |
-          npx expo install ${{ inputs.packages }} > add.log 2>&1 || (tail -30 add.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1)
+          npx expo install ${{ inputs.packages }} > add.log 2>&1 || echo "::warning::expo install exited non-zero; see add.log on ci/deps"
+          echo "exit=$?" >> add.log
       - name: expo install --fix
         run: |
-          npx expo install --fix > fix.log 2>&1 || (tail -30 fix.log | while IFS= read -r l; do echo "::error::$l"; done; exit 1)
+          npx expo install --fix > fix.log 2>&1 || echo "::warning::expo install --fix exited non-zero; see fix.log on ci/deps"
           npx expo install --check > check.log 2>&1 || true
           npx -y expo-doctor > doctor.log 2>&1 || true
           npm ls @react-navigation/native > nav.log 2>&1 || true
@@ -38,6 +39,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b ci/deps
-          git add -f package.json package-lock.json fix.log check.log doctor.log nav.log
+          touch add.log; git add -f package.json package-lock.json add.log fix.log check.log doctor.log nav.log
           git commit -m "chore: align dependencies with Expo SDK (expo install --fix)"
           git push -f origin ci/deps
