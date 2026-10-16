@@ -62,3 +62,43 @@ export function workoutsToCsv(rows: readonly ExportRow[]): string {
     ]),
   );
 }
+
+// --- milestones and weekly goal (hard rule 9: all own data, also the local-only parts) ---
+
+export const BADGES_CSV_FILE = 'suppcity-mijlpalen.csv';
+export const WEEKLY_GOAL_CSV_FILE = 'suppcity-weekdoel.csv';
+
+export const BADGE_EXPORT_HEADERS = ['badge_id', 'title', 'description', 'earned_at', 'workout_id'] as const;
+
+export interface BadgeExportRow {
+  badgeId: string;
+  title: string;
+  description: string;
+  earnedAt: string;
+  workoutId: string | null;
+}
+
+export function badgesToCsv(rows: readonly BadgeExportRow[]): string {
+  return toCsv(
+    BADGE_EXPORT_HEADERS,
+    rows.map((r) => [r.badgeId, r.title, r.description, r.earnedAt, r.workoutId]),
+  );
+}
+
+export const WEEKLY_GOAL_EXPORT_HEADERS = ['valid_from_week', 'valid_from_date', 'weekly_goal', 'current'] as const;
+
+export interface WeeklyGoalExportRow {
+  /** ISO week "2026-W42"; empty = since the start (before the first change). */
+  validFromWeek: string;
+  /** Monday YYYY-MM-DD; empty = since the start. */
+  validFromDate: string;
+  weeklyGoal: number;
+  current: boolean;
+}
+
+export function weeklyGoalsToCsv(rows: readonly WeeklyGoalExportRow[]): string {
+  return toCsv(
+    WEEKLY_GOAL_EXPORT_HEADERS,
+    rows.map((r) => [r.validFromWeek, r.validFromDate, r.weeklyGoal, r.current ? 'ja' : 'nee']),
+  );
+}

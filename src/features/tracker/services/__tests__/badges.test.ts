@@ -10,6 +10,7 @@ import {
   syncBadges,
   WEEKLY_GOAL_KEY,
 } from '../badges';
+import { exportMilestonesCsv } from '../dataPort';
 
 const maybe = nodeSqliteAvailable ? describe : describe.skip;
 
@@ -145,5 +146,26 @@ maybe('badge storage and sync', () => {
     // Changing twice in the same week keeps one entry for that week.
     await saveWeeklyGoal(repos.appState, 3, new Date('2026-10-13T08:00:00'));
     expect((await loadWeeklyGoalHistory(repos.appState)).map((h) => h.goal)).toEqual([3, 2, 5, 3]);
+  });
+});
+
+maybe('CSV export of milestones and weekly goal (hard rule 9)', () => {
+  it('exports earned badges and the goal per week', async () => {
+    const { repos } = await createTestRepositories();
+    let files = await exportMilestonesCsv(repos);
+    expect(files.map((f) => f.fileName)).toEqual(['suppcity-mijlpalen.csv', 'suppcity-weekdoel.csv']);
+    expect(files[1]?.csv.trim().split(/\r?\n/)).toEqual(['valid_from_week,valid_from_date,weekly_goal,current', ',,3,ja']);
+
+    await logWorkout(repos, 'w1', '2026-10-01T10:00:00.000Z', [['bench-press-barbell', 100, 1]]);
+    await syncBadges(repos);
+    await saveWeeklyGoal(repos.appState, 4, new Date('2026-10-14T12:00:00'));
+    files = await exportMilestonesCsv(repos);
+    const badgeLines = files[0]!.csv.trim().split(/\r?\n/);
+    expect(badgeLines[0]).toBe('badge_id,title,description,earned_at,workout_id');
+    expect(badgeLines.slice(1)).toEqual([
+      'bench_100,Honderd,Eerste keer 100 kg op de bank,2026-10-01T11:00:00.000Z,w1',
+      'first_workout,Eerste workout,Je eerste training afgerond,2026-10-01T11:00:00.000Z,w1',
+    ]);
+    expect(files[1]!.csv.trim().split(/\r?\n/).slice(1)).toEqual([',,3,nee', '2026-W42,2026-10-12,4,ja']);
   });
 });

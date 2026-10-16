@@ -2,7 +2,16 @@ import { EXERCISES_NL } from '@/content/exercises.nl';
 import type { Repositories } from '@/lib/db/repositories';
 import type { Exercise, NewRow } from '@/lib/db/types';
 
-import { workoutsToCsv } from '../logic/csvExport';
+import { BADGE_BY_ID, isBadgeId } from '../logic/badges';
+import {
+  BADGES_CSV_FILE,
+  badgesToCsv,
+  WEEKLY_GOAL_CSV_FILE,
+  weeklyGoalsToCsv,
+  workoutsToCsv,
+  type WeeklyGoalExportRow,
+} from '../logic/csvExport';
+import { loadWeeklyGoal, loadWeeklyGoalHistory } from './badges';
 import {
   buildAliasIndex,
   mapExerciseNames,
@@ -118,4 +127,28 @@ export async function exportAllCsv(repos: Repositories): Promise<{ csv: string; 
     }),
   );
   return { csv, rows: rows.length };
+}
+
+/**
+ * Hard rule 9: milestones (earned badges) and the weekly goal (the goal per week since
+ * it was changed) as two CSV files, next to the training CSV. Local-only data.
+ */
+export async function exportMilestonesCsv(repos: Repositories): Promise<{ fileName: string; csv: string }[]> {
+  const [badges, goal, history] = await Promise.all([
+    repos.badges.list(),
+    loadWeeklyGoal(repos.appState),
+    loadWeeklyGoalHistory(repos.appState),
+  ]);
+  const badgeRows = badges.map((b) => {
+    const def = isBadgeId(b.badge_id) ? BADGE_BY_ID.get(b.badge_id) : undefined;
+    return { badgeId: b.badge_id, title: def?.title ?? b.badge_id, description: def?.description ?? '', earnedAt: b.earned_at, workoutId: b.source_ref };
+  });
+  const goalRows: WeeklyGoalExportRow[] =
+    history.length > 0
+      ? history.map((h, i) => ({ validFromWeek: h.key, validFromDate: h.from, weeklyGoal: h.goal, current: i === history.length - 1 }))
+      : [{ validFromWeek: '', validFromDate: '', weeklyGoal: goal, current: true }];
+  return [
+    { fileName: BADGES_CSV_FILE, csv: badgesToCsv(badgeRows) },
+    { fileName: WEEKLY_GOAL_CSV_FILE, csv: weeklyGoalsToCsv(goalRows) },
+  ];
 }

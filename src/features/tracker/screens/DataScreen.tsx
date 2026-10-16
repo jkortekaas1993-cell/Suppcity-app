@@ -8,7 +8,7 @@ import { TextField } from '../components/primitives';
 import { StackScreen } from '../components/StackScreen';
 import { CsvImportError } from '../logic/csvImport';
 import { pickCsvText, shareCsvFile } from '../services/csvFiles';
-import { exportAllCsv, importWorkoutCsv, type ImportSummary } from '../services/dataPort';
+import { exportAllCsv, exportMilestonesCsv, importWorkoutCsv, type ImportSummary } from '../services/dataPort';
 
 /**
  * CSV export of all own training data (hard rule 9) and Hevy/Strong import.
@@ -46,6 +46,14 @@ export function DataScreen({ extraExports = [] }: DataScreenProps = {}) {
     }
   };
 
+  // Milestones + weekly goal: an extra export like the supplement one, owned by the tracker.
+  const milestones: ExtraCsvExport = {
+    title: 'Mijlpalen en weekdoel',
+    body: 'Je behaalde mijlpalen en je weekdoel per week als CSV. Deze gegevens staan alleen op dit toestel.',
+    load: () => exportMilestonesCsv(repos),
+  };
+  const allExtras = [milestones, ...extraExports];
+
   const doExtraExport = async (index: number, extra: ExtraCsvExport) => {
     setBusy(`extra-${index}`);
     try {
@@ -80,7 +88,7 @@ export function DataScreen({ extraExports = [] }: DataScreenProps = {}) {
         <Button label="Exporteer als CSV" icon="share" loading={busy === 'export'} onPress={() => void doExport()} />
       </Card>
 
-      {extraExports.map((extra, i) => (
+      {allExtras.map((extra, i) => (
         <Card key={extra.title} eyebrow={extra.title}>
           <Text>{extra.body}</Text>
           <Button
