@@ -32,7 +32,7 @@ export function presentCheckout(checkoutUrl: string, handlers: CheckoutHandlers)
       handlers.onCompleted(event.orderDetails?.id ?? null);
     }),
     sheet.addEventListener('close', () => handlers.onClose?.()),
-    sheet.addEventListener('error', (error: CheckoutException) => handlers.onError?.(error.message)),
+    sheet.addEventListener('error', (error: CheckoutException) => handlers.onError?.(error.message ?? 'Afrekenen mislukt.')),
   ];
   sheet.present(checkoutUrl);
   return () => subs.forEach((s) => s?.remove());
