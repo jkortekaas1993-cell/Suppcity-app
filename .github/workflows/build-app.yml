@@ -17,7 +17,7 @@ on:
         default: preview
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -41,8 +41,13 @@ jobs:
       - name: Start build
         run: |
           if ! eas build --platform "${{ inputs.platform }}" --profile "${{ inputs.profile }}" \
-            --non-interactive --no-wait --json > build.json 2> eas.log; then
+            --non-interactive --no-wait --json > build.json 2> eas.log < /dev/null; then
             cat eas.log build.json 2>/dev/null | grep -v '^\s*$' | tail -40 | while IFS= read -r l; do echo "::error::$l"; done
+            # Logs are not downloadable outside GitHub: publish them to the ci/logs branch.
+            mkdir -p /tmp/l && cp eas.log build.json /tmp/l/ 2>/dev/null || true
+            git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout --orphan ci/logs && git rm -rfq . && cp /tmp/l/* . 2>/dev/null; git add -A
+            git commit -qm "EAS build log" && git push -fq origin ci/logs || true
             exit 1
           fi
           node -e "
