@@ -1,63 +1,43 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HIT_SLOP_MIN, Text, useTheme } from '@/ui';
+import { Screen, useTheme } from '@/ui';
 
 /**
- * Pushed (non-tab) screen: back button + uppercase title, same rhythm as `Screen`.
- * Candidate for src/ui once the Architect agrees on a shared header.
+ * Pushed (non-tab) screen of the shop and account features: the design-system `Screen`
+ * with a back chevron, the smaller "title" style and an optional sticky footer that
+ * clears the home indicator.
  */
 export function SubScreen({
   title,
+  eyebrow,
   subtitle,
   children,
   footer,
+  fallback = '/shop',
 }: {
   title: string;
+  eyebrow?: string;
   subtitle?: string;
   children?: ReactNode;
   /** Sticky bottom area for the screen's one primary action. */
   footer?: ReactNode;
+  /** Where "Terug" goes when there is no history (deep link). */
+  fallback?: Href;
 }) {
-  const { colors, space } = useTheme();
+  const { space } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Terug"
-        onPress={() => (router.canGoBack() ? router.back() : router.replace('/shop'))}
-        style={{ minHeight: HIT_SLOP_MIN, justifyContent: 'center', paddingHorizontal: space.lg }}
-      >
-        <Text variant="label" tone="muted">
-          ‹ Terug
-        </Text>
-      </Pressable>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
-        <View style={{ padding: space.lg, paddingTop: 0, gap: space.lg }}>
-          <View style={{ gap: space.xs }}>
-            <Text variant="title" accessibilityRole="header">
-              {title}
-            </Text>
-            {subtitle ? <Text tone="muted">{subtitle}</Text> : null}
-          </View>
-          {children}
-        </View>
-      </ScrollView>
-      {footer ? (
-        <View
-          style={{
-            padding: space.lg,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-            backgroundColor: colors.surface,
-            gap: space.sm,
-          }}
-        >
-          {footer}
-        </View>
-      ) : null}
-    </SafeAreaView>
+    <Screen
+      title={title}
+      eyebrow={eyebrow}
+      subtitle={subtitle}
+      onBack={() => (router.canGoBack() ? router.back() : router.replace(fallback))}
+      footer={footer ? <View style={{ gap: space.sm, paddingBottom: Math.max(0, insets.bottom - space.md) }}>{footer}</View> : undefined}
+    >
+      {children}
+    </Screen>
   );
 }

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
 
-import { LoadState, Notice, SubScreen } from '@/features/shop';
+import { formatDateNl, LoadState, Notice, SubScreen } from '@/features/shop';
 import { FEATURES, POLICY_VERSION } from '@/lib/config';
 import { useCustomerSession } from '@/lib/shopify';
 import type { ConsentState, ConsentType } from '@/lib/supabase';
-import { Card, Text, useTheme } from '@/ui';
+import { Card, layout, Text, useTheme } from '@/ui';
 
 import { applyConsent, CONSENT_COPY, visibleConsents } from '../consentCopy';
 import { getAccountServices } from '../services/registry';
@@ -56,18 +56,19 @@ export function PrivacyScreen() {
 
   return (
     <SubScreen
-      title="Toestemmingen"
+      title="Privacy en toestemmingen"
       subtitle="Elke keuze staat los van de andere en kun je altijd weer uitzetten. Je trainings- en lichaamsgegevens gebruiken we nooit voor marketing of punten."
+      fallback="/ik"
     >
       <LoadState loading={loading} error={null} />
       {error ? <Notice message={error} tone="danger" onDismiss={() => setError(null)} /> : null}
       {unavailable && !loading ? (
-        <Text tone="muted">
+        <Text tone="secondary">
           {signedIn ? 'Toestemmingen beheren is binnenkort beschikbaar.' : 'Log in om je toestemmingen te beheren. Zonder account staat alles uit.'}
         </Text>
       ) : null}
-      <Card style={{ padding: 0 }}>
-        {visibleConsents(FEATURES).map((type) => {
+      <Card padding={0} gap={0}>
+        {visibleConsents(FEATURES).map((type, i, all) => {
           const state = states.find((s) => s.type === type);
           const copy = CONSENT_COPY[type];
           return (
@@ -77,19 +78,20 @@ export function PrivacyScreen() {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: space.md,
-                padding: space.lg,
-                borderBottomWidth: 1,
+                paddingVertical: space.md + 2,
+                paddingHorizontal: layout.cardPadding,
+                borderBottomWidth: i < all.length - 1 ? 1 : 0,
                 borderBottomColor: colors.border,
               }}
             >
               <View style={{ flex: 1, gap: space.xxs }}>
-                <Text variant="heading">{copy.title}</Text>
-                <Text variant="caption" tone="muted">
+                <Text variant="bodyStrong">{copy.title}</Text>
+                <Text variant="caption" tone="secondary">
                   {copy.body}
                 </Text>
                 {state?.changedAt ? (
-                  <Text variant="caption" tone="muted">
-                    Laatst gewijzigd {new Date(state.changedAt).toLocaleDateString('nl-NL')}
+                  <Text variant="caption" tone="tertiary" tnum>
+                    Laatst gewijzigd {formatDateNl(state.changedAt, 'long')}
                   </Text>
                 ) : null}
               </View>
@@ -98,7 +100,9 @@ export function PrivacyScreen() {
                 value={state?.granted ?? false}
                 disabled={unavailable || pending !== null}
                 onValueChange={(v) => void toggle(type, v)}
-                trackColor={{ true: colors.accent, false: colors.border }}
+                trackColor={{ true: colors.accent, false: colors.bg3 }}
+                thumbColor={colors.text1}
+                ios_backgroundColor={colors.bg3}
               />
             </View>
           );

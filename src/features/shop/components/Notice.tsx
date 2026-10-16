@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { Button, Text, useTheme } from '@/ui';
+import { Button, Icon, radius, Text, useTheme } from '@/ui';
 
 /** Inline message (no pop-up). tone=danger for errors. */
 export function Notice({
@@ -14,24 +14,30 @@ export function Notice({
   onDismiss?: () => void;
   action?: { label: string; onPress: () => void };
 }) {
-  const { colors, radius, space } = useTheme();
+  const { colors, space } = useTheme();
+  const danger = tone === 'danger';
   return (
     <View
       accessibilityLiveRegion="polite"
       style={{
         borderWidth: 1,
-        borderColor: tone === 'danger' ? colors.danger : colors.border,
-        borderRadius: radius.sm,
-        padding: space.md,
+        borderColor: danger ? colors.error : colors.border,
+        borderRadius: radius.md,
+        padding: space.md + 2,
         gap: space.sm,
-        backgroundColor: colors.surfaceRaised,
+        backgroundColor: danger ? colors.errorMuted : colors.bg2,
       }}
     >
-      <Text tone={tone === 'danger' ? 'danger' : 'default'}>{message}</Text>
+      <View style={{ flexDirection: 'row', gap: space.sm + 2, alignItems: 'flex-start' }}>
+        <Icon name="info" size={18} color={danger ? colors.error : colors.text2} />
+        <Text variant="caption" tone={danger ? 'danger' : 'default'} style={{ flex: 1, fontSize: 14, lineHeight: 19 }}>
+          {message}
+        </Text>
+      </View>
       {action || onDismiss ? (
-        <View style={{ flexDirection: 'row', gap: space.sm }}>
-          {action ? <Button label={action.label} variant="secondary" onPress={action.onPress} /> : null}
-          {onDismiss ? <Button label="Sluiten" variant="ghost" onPress={onDismiss} /> : null}
+        <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+          {action ? <Button label={action.label} variant="secondary" size="sm" onPress={action.onPress} /> : null}
+          {onDismiss ? <Button label="Sluiten" variant="ghost" size="sm" onPress={onDismiss} /> : null}
         </View>
       ) : null}
     </View>

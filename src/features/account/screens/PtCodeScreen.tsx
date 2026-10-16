@@ -32,9 +32,10 @@ export function PtCodeScreen() {
     <SubScreen
       title="PT-code"
       subtitle="Train je met een personal trainer van Supp City? Vul zijn of haar code in. Delen van je trainingen zet je apart aan bij Toestemmingen."
-      footer={<Button label="Koppelen" fullWidth loading={busy} disabled={!service} onPress={link} />}
+      fallback="/ik"
+      footer={<Button label="Koppelen" size="lg" fullWidth loading={busy} disabled={!service} onPress={link} />}
     >
-      {!service ? <Text tone="muted">PT-codes koppelen is binnenkort beschikbaar.</Text> : null}
+      {!service ? <Text tone="secondary">PT-codes koppelen is binnenkort beschikbaar.</Text> : null}
       {current.data ? (
         <Notice
           message={`Gekoppeld aan ${current.data}.`}

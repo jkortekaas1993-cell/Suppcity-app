@@ -47,7 +47,16 @@ export function mapProductSummary(raw: RawProductCard): ProductSummary {
     image: mapImage(raw.featuredImage, raw.title),
     priceFrom: parseMoney(raw.priceRange.minVariantPrice),
     available: raw.availableForSale,
+    vendor: raw.vendor?.trim() || null,
+    quickAddVariantId: quickAddVariantId(raw),
   };
+}
+
+/** The one variant to add from the grid: only when the product has exactly one, and it is in stock. */
+export function quickAddVariantId(raw: Pick<RawProductCard, 'quickVariants'>): string | null {
+  const nodes = raw.quickVariants?.nodes ?? [];
+  const only = nodes.length === 1 ? nodes[0] : undefined;
+  return only && only.availableForSale ? only.id : null;
 }
 
 export function mapVariant(raw: RawVariant, productTitle: string): ProductVariant {
@@ -79,7 +88,6 @@ export function mapProductDetail(raw: RawProductDetail): ProductDetail {
   return {
     ...mapProductSummary(raw),
     description: raw.description,
-    vendor: raw.vendor ?? null,
     images: raw.images.nodes.map((i) => mapImage(i, raw.title)).filter((i): i is ShopImage => i !== null),
     variants,
     hasOnlyDefaultVariant: only !== undefined && only.title === DEFAULT_VARIANT_TITLE,

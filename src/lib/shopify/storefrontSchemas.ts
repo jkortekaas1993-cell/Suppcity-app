@@ -34,6 +34,12 @@ export const productCardSchema = z.object({
   availableForSale: z.boolean(),
   featuredImage: imageSchema.nullable().optional(),
   priceRange: z.object({ minVariantPrice: moneyV2Schema }),
+  vendor: nullableString,
+  /** Alias of `variants(first: 2)` in the ProductCard fragment (quick add from the grid). */
+  quickVariants: z
+    .object({ nodes: z.array(z.object({ id: z.string(), availableForSale: z.boolean() })) })
+    .nullable()
+    .optional(),
 });
 
 export const productDetailSchema = productCardSchema.extend({

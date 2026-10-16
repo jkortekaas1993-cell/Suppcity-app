@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 
 import { Field, Notice, SubScreen } from '@/features/shop';
-import { Button, Card, Text } from '@/ui';
+import { Button, Card, EmptyState, Text } from '@/ui';
 
 import { deleteAccount } from '../services/session';
 
@@ -17,8 +17,13 @@ export function DeleteAccountScreen() {
 
   if (done) {
     return (
-      <SubScreen title="Account verwijderd" subtitle="Je app-account en al je trainingsgegevens zijn verwijderd.">
-        <Button label="Sluiten" onPress={() => router.replace('/ik')} />
+      <SubScreen title="Account verwijderd" fallback="/ik">
+        <EmptyState
+          icon="check"
+          title="Je account is verwijderd"
+          body="Je app-account en al je trainingsgegevens zijn verwijderd."
+          action={{ label: 'Sluiten', onPress: () => router.replace('/ik') }}
+        />
       </SubScreen>
     );
   }
@@ -26,12 +31,14 @@ export function DeleteAccountScreen() {
   return (
     <SubScreen
       title="Account verwijderen"
+      fallback="/ik"
       footer={
         <>
           {error ? <Notice message={error} tone="danger" onDismiss={() => setError(null)} /> : null}
           <Button
             label="Definitief verwijderen"
             variant="danger"
+            size="lg"
             fullWidth
             loading={busy}
             disabled={confirm.trim().toUpperCase() !== CONFIRM_WORD}
@@ -47,10 +54,10 @@ export function DeleteAccountScreen() {
       }
     >
       <Card eyebrow="Dit wordt verwijderd">
-        <Text>Je app-account, trainingen, sets, schema&apos;s, toestemmingen, punten en voorraadteller. Dit kan niet ongedaan worden gemaakt.</Text>
+        <Text tone="secondary">Je app-account, trainingen, sets, schema&apos;s, toestemmingen, punten en voorraadteller. Dit kan niet ongedaan worden gemaakt.</Text>
       </Card>
       <Card eyebrow="Dit blijft bewaard">
-        <Text>
+        <Text tone="secondary">
           Je bestellingen en facturen blijven bij onze webshop (Shopify) bewaard, omdat we die wettelijk 7 jaar moeten
           bewaren voor de belastingdienst. Wil je ook je webshop-account laten verwijderen? Mail info@suppcity.nl.
         </Text>

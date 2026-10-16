@@ -1,18 +1,18 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
+import { View } from 'react-native';
 
-import { getCustomerAccount, useCustomerSession, formatMoney } from '@/lib/shopify';
-import { Button, Card, Text } from '@/ui';
+import { formatMoney, getCustomerAccount, useCustomerSession } from '@/lib/shopify';
+import { Button, Card, Text, useTheme } from '@/ui';
 
 import { reorder } from '../actions/reorder';
+import { productCount } from '../logic/format';
 import { useAsync } from '../state/useAsync';
 import { Notice } from './Notice';
 
-const dateNl = (iso: string) =>
-  new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
-
 /** "Opnieuw bestellen" at the top of the Shop tab: only when signed in with past orders. */
 export function ReorderSection() {
+  const { space } = useTheme();
   const session = useCustomerSession();
   const signedIn = session === 'signedIn';
   const orders = useAsync(async () => (signedIn ? (await getCustomerAccount()).orders({ first: 1 }) : null), [signedIn]);
@@ -22,32 +22,39 @@ export function ReorderSection() {
   const last = orders.data?.items[0];
   if (!signedIn || !last) return null;
 
-  const itemSummary = last.lines
-    .slice(0, 3)
-    .map((l) => `${l.quantity}× ${l.title}`)
-    .join(', ');
+  const items = last.lines.reduce((n, l) => n + l.quantity, 0);
 
   return (
-    <Card eyebrow="Opnieuw bestellen" highlighted>
-      <Text variant="heading">
-        {last.name} · {dateNl(last.processedAt)}
-      </Text>
-      <Text tone="muted">
-        {itemSummary}
-        {last.lines.length > 3 ? ` en ${last.lines.length - 3} meer` : ''} · {formatMoney(last.total)}
-      </Text>
-      {message ? <Notice message={message} tone="danger" onDismiss={() => setMessage(null)} /> : null}
-      <Button
-        label="Zet in winkelwagen"
-        loading={busy}
-        onPress={async () => {
-          setBusy(true);
-          const res = await reorder(last);
-          setBusy(false);
-          if (res.ok) router.push('/shop/cart');
-          else setMessage(res.message);
-        }}
-      />
+    <Card padding={0} gap={0}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md, paddingHorizontal: space.md + 2 }}>
+        <View style={{ flex: 1, gap: space.xxs }}>
+          <Text variant="eyebrow" tone="accent">
+            Opnieuw bestellen
+          </Text>
+          <Text variant="bodyStrong">Je vorige bestelling · {productCount(items)}</Text>
+          <Text variant="caption" tone="tertiary" tnum>
+            {formatMoney(last.total)} · in 2 tikken klaar
+          </Text>
+        </View>
+        <Button
+          label="Bestel"
+          size="sm"
+          loading={busy}
+          accessibilityHint="Zet je vorige bestelling in de winkelwagen"
+          onPress={async () => {
+            setBusy(true);
+            const res = await reorder(last);
+            setBusy(false);
+            if (res.ok) router.push('/shop/cart');
+            else setMessage(res.message);
+          }}
+        />
+      </View>
+      {message ? (
+        <View style={{ padding: space.md, paddingTop: 0 }}>
+          <Notice message={message} tone="danger" onDismiss={() => setMessage(null)} />
+        </View>
+      ) : null}
     </Card>
   );
 }

@@ -2,9 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Text, useTheme } from '@/ui';
+import { Button, SectionLabel, Text, useTheme } from '@/ui';
 
-import { Chip } from '../components/Chip';
+import { OptionChip } from '../components/OptionChip';
 import { Field } from '../components/Field';
 import { SubScreen } from '../components/SubScreen';
 import {
@@ -86,22 +86,20 @@ export function StockEditScreen() {
       footer={
         <>
           {preview ? (
-            <Text tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+            <Text variant="caption" tone="secondary" tnum>
               {preview.servingsTotal} porties · nog ~{preview.daysLeft} dagen
             </Text>
           ) : null}
-          <Button label="Opslaan" fullWidth onPress={save} />
+          <Button label="Opslaan" size="lg" fullWidth onPress={save} />
         </>
       }
     >
       <Field label="Product" value={title} onChangeText={setTitle} placeholder="Bijv. Creatine monohydraat" error={submitted ? titleError : null} />
       <View style={{ gap: space.sm }}>
-        <Text variant="label" tone="muted">
-          Eenheid
-        </Text>
+        <SectionLabel label="Eenheid" />
         <View style={{ flexDirection: 'row', gap: space.sm }} accessibilityRole="radiogroup">
           {STOCK_UNITS.map((u) => (
-            <Chip key={u} label={UNIT_LABEL[u]} selected={unit === u} onPress={() => setUnit(u)} />
+            <OptionChip key={u} label={UNIT_LABEL[u]} selected={unit === u} onPress={() => setUnit(u)} />
           ))}
         </View>
       </View>
@@ -160,7 +158,7 @@ export function StockEditScreen() {
           />
           <Button
             label="Verwijderen"
-            variant="ghost"
+            variant="danger"
             onPress={async () => {
               await stockStore.remove(existing.id);
               router.back();
