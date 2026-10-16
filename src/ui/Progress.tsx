@@ -1,9 +1,19 @@
+import { useEffect, type ReactNode } from 'react';
 import { View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
-import type { ReactNode } from 'react';
 
-import type { ThemeColors } from './tokens';
+import { Glow } from './motion/Glow';
+import { motion, type ThemeColors } from './tokens';
 import { useTheme } from './ThemeProvider';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export type ProgressTone = 'accent' | 'gold' | 'success' | 'neutral';
 
@@ -105,15 +115,51 @@ export interface RingProps {
   children?: ReactNode;
   /** e.g. "Rusttimer, 1 minuut 24 over". */
   accessibilityLabel?: string;
+  /**
+   * Fill from 0 on mount (weekly goal, kcal). Leave off for live values (rest timer): those
+   * glide 300 ms between updates instead.
+   */
+  animateIn?: boolean;
+  /** Soft light behind the ring (the running rest timer). */
+  glow?: boolean;
   testID?: string;
 }
 
-/** Circular progress (rest timer, kcal). Starts at 12 o'clock, runs clockwise. */
-export function Ring({ progress, size = 64, strokeWidth = 6, tone = 'accent', children, accessibilityLabel, testID }: RingProps) {
+/** Circular progress (rest timer, kcal, weekly goal). Starts at 12 o'clock, runs clockwise. */
+export function Ring({
+  progress,
+  size = 64,
+  strokeWidth = 6,
+  tone = 'accent',
+  children,
+  accessibilityLabel,
+  animateIn = false,
+  glow = false,
+  testID,
+}: RingProps) {
   const { colors } = useTheme();
+  const reduceMotion = useReducedMotion();
   const r = (size - strokeWidth) / 2;
   const circ = 2 * Math.PI * r;
   const v = clamp01(progress);
+  const shown = useSharedValue(animateIn && !reduceMotion ? 0 : v);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      shown.set(v);
+      return;
+    }
+    shown.set(
+      withTiming(v, {
+        duration: animateIn ? motion.draw : 300,
+        easing: animateIn ? Easing.out(Easing.cubic) : Easing.linear,
+      }),
+    );
+  }, [v, animateIn, reduceMotion, shown]);
+
+  const arc = useAnimatedProps(() => ({ strokeDashoffset: circ * (1 - shown.get()) }));
+  const fill = toneFill(colors, tone);
+
   return (
     <View
       testID={testID}
@@ -122,18 +168,25 @@ export function Ring({ progress, size = 64, strokeWidth = 6, tone = 'accent', ch
       accessibilityLabel={accessibilityLabel}
       style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
     >
+      {glow ? (
+        <Glow
+          color={fill}
+          intensity={0.35}
+          style={{ position: 'absolute', left: -size * 0.3, top: -size * 0.3, width: size * 1.6, height: size * 1.6 }}
+        />
+      ) : null}
       <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.bg3} strokeWidth={strokeWidth} fill="none" />
         {v > 0 ? (
-          <Circle
+          <AnimatedCircle
             cx={size / 2}
             cy={size / 2}
             r={r}
-            stroke={toneFill(colors, tone)}
+            stroke={fill}
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeDasharray={`${circ} ${circ}`}
-            strokeDashoffset={circ * (1 - v)}
+            animatedProps={arc}
             fill="none"
           />
         ) : null}

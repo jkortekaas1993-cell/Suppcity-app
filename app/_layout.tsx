@@ -7,7 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppServices } from '@/integration';
 import { DatabaseProvider } from '@/lib/db';
-import { colors as palette, FONT_ASSETS, FONT_LOAD_TIMEOUT_MS, ThemeProvider, useTheme } from '@/ui';
+import { BrandIntro, colors as palette, FONT_ASSETS, FONT_LOAD_TIMEOUT_MS, ThemeProvider, useTheme } from '@/ui';
 
 function RootStack() {
   const { colors } = useTheme();
@@ -44,8 +44,9 @@ function useFontsReady(): { ready: boolean; fontsLoaded: boolean } {
 
 export default function RootLayout() {
   const { ready, fontsLoaded } = useFontsReady();
-  // No expo-splash-screen in this app (not a dependency): while the fonts load (at most
-  // FONT_LOAD_TIMEOUT_MS) show the app background, so there is no white flash.
+  // The native splash (expo-splash-screen config in app.json: logo on bg0) auto-hides on the
+  // first frame. While the fonts load (at most FONT_LOAD_TIMEOUT_MS) show the same background,
+  // then BrandIntro continues the splash with the logo + rising skyline.
   if (!ready) return <View style={{ flex: 1, backgroundColor: palette.dark.bg0 }} />;
   return (
     <SafeAreaProvider>
@@ -55,6 +56,7 @@ export default function RootLayout() {
           <AppServices>
             <RootStack />
           </AppServices>
+          <BrandIntro />
         </DatabaseProvider>
       </ThemeProvider>
     </SafeAreaProvider>
@@ -68,7 +70,7 @@ export default function RootLayout() {
  */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
-    <View style={{ flex: 1, backgroundColor: '#08090A', padding: 24, paddingTop: 72 }}>
+    <View style={{ flex: 1, backgroundColor: '#070809', padding: 24, paddingTop: 72 }}>
       <RNText style={{ color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginBottom: 12 }}>
         Er ging iets mis
       </RNText>
@@ -85,9 +87,9 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       <Pressable
         onPress={retry}
         accessibilityRole="button"
-        style={{ marginTop: 16, minHeight: 48, borderRadius: 8, backgroundColor: '#1FC7B6', alignItems: 'center', justifyContent: 'center' }}
+        style={{ marginTop: 16, minHeight: 48, borderRadius: 8, backgroundColor: '#14D7D1', alignItems: 'center', justifyContent: 'center' }}
       >
-        <RNText style={{ color: '#0E1113', fontSize: 16, fontWeight: '700' }}>Opnieuw proberen</RNText>
+        <RNText style={{ color: '#061413', fontSize: 16, fontWeight: '700' }}>Opnieuw proberen</RNText>
       </Pressable>
     </View>
   );

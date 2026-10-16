@@ -1,6 +1,15 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import Animated, {
+  Easing,
+  useAnimatedProps,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+
+import { motion } from '../tokens';
 
 import { Text } from '../Text';
 import { useTheme } from '../ThemeProvider';
@@ -33,6 +42,20 @@ export interface LineChartProps {
   testID?: string;
 }
 
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedG = Animated.createAnimatedComponent(G);
+
+/** Length of a polyline through the points (for the draw-in dash). */
+function polylineLength(points: readonly { x: number; y: number }[]): number {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (a && b) len += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return len;
+}
+
 const PAD: Omit<Frame, 'width' | 'height'> = { left: 4, right: 30, top: 20, bottom: 22 };
 const defaultFormat = (v: number) => Math.round(v).toLocaleString('nl-NL');
 
@@ -63,6 +86,24 @@ export function LineChart({
   const lastPr = data.reduce((acc, d, i) => (d.pr ? i : acc), -1);
   const hasPr = lastPr >= 0;
   const font = fonts.regular;
+
+  // Draw-in: the line draws itself (0.8 s), then the PR dots fade in. Replays when the data
+  // changes (period switch). Static with "reduce motion".
+  const reduceMotion = useReducedMotion();
+  const length = Math.ceil(polylineLength(points)) + 2;
+  const drawn = useSharedValue(reduceMotion ? 1 : 0);
+  const signature = `${width}|${values.join(',')}`;
+  useEffect(() => {
+    if (reduceMotion || width === 0) {
+      drawn.set(1);
+      return;
+    }
+    drawn.set(0);
+    drawn.set(withTiming(1, { duration: motion.draw, easing: Easing.out(Easing.cubic) }));
+  }, [signature, reduceMotion, width, drawn]);
+  const lineProps = useAnimatedProps(() => ({ strokeDashoffset: length * (1 - drawn.get()) }));
+  const dotsProps = useAnimatedProps(() => ({ opacity: Math.max(0, (drawn.get() - 0.85) / 0.15) }));
+  const areaProps = useAnimatedProps(() => ({ opacity: drawn.get() }));
 
   return (
     <View testID={testID} style={{ gap: space.sm + 2 }}>
@@ -100,24 +141,30 @@ export function LineChart({
                 {formatY(t)}
               </SvgText>
             ))}
-            {points.length > 1 ? <Path d={areaPath(points, baseY)} fill={`url(#${gradientId})`} /> : null}
-            <Path
+            {points.length > 1 ? (
+              <AnimatedPath d={areaPath(points, baseY)} fill={`url(#${gradientId})`} animatedProps={areaProps} />
+            ) : null}
+            <AnimatedPath
               d={linePath(points)}
               fill="none"
               stroke={stroke}
               strokeWidth={2.5}
               strokeLinejoin="round"
               strokeLinecap="round"
+              strokeDasharray={`${length} ${length}`}
+              animatedProps={lineProps}
             />
-            {points.map((p, i) =>
-              data[i]?.pr ? (
-                i === lastPr ? (
-                  <Circle key={`p${i}`} cx={p.x} cy={p.y} r={5} fill={colors.gold} stroke={colors.bg0} strokeWidth={2} />
-                ) : (
-                  <Circle key={`p${i}`} cx={p.x} cy={p.y} r={4} fill={colors.gold} />
-                )
-              ) : null,
-            )}
+            <AnimatedG animatedProps={dotsProps}>
+              {points.map((p, i) =>
+                data[i]?.pr ? (
+                  i === lastPr ? (
+                    <Circle key={`p${i}`} cx={p.x} cy={p.y} r={5} fill={colors.gold} stroke={colors.bg0} strokeWidth={2} />
+                  ) : (
+                    <Circle key={`p${i}`} cx={p.x} cy={p.y} r={4} fill={colors.gold} />
+                  )
+                ) : null,
+              )}
+            </AnimatedG>
             {xLabels?.map((label, i) => {
               const p = points[i];
               if (!label || !p) return null;

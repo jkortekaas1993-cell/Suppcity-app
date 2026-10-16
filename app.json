@@ -13,7 +13,12 @@
     },
     "android": {
       "package": "nl.suppcity.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/adaptive-icon.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png",
+        "backgroundColor": "#5CE1E6"
+      }
     },
     "plugins": [
       "expo-router",
@@ -22,10 +27,19 @@
       [
         "expo-notifications",
         {
-          "color": "#1FC7B6"
+          "color": "#14D7D1"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#070809"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
@@ -34,6 +48,8 @@
       "eas": {
         "projectId": "e1e60754-e445-433b-9b26-d41772d4f266"
       }
-    }
+    },
+    "icon": "./assets/brand/icon.png",
+    "backgroundColor": "#070809"
   }
 }

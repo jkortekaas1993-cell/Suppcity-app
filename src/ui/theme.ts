@@ -12,7 +12,9 @@ import { makeTypography, type Typography } from './typography';
 
 export {
   ACCENT,
+  BRAND_LIGHT,
   colors,
+  elevation,
   fontFamily,
   HIT_SLOP_MIN,
   layout,

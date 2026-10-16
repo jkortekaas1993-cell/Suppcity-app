@@ -10,15 +10,21 @@
  *   Never on exercise names or headings.
  */
 
-/** Brand accent (Supp City logo turquoise). The single swap point. */
-export const ACCENT = '#1FC7B6';
+/**
+ * Brand accent: the suppcity.nl turquoise (design round 3, owner-approved 2026-10-16).
+ * The single swap point.
+ */
+export const ACCENT = '#14D7D1';
+
+/** Lighter logo turquoise (the app icon's background). Brand surfaces only, never body text on light. */
+export const BRAND_LIGHT = '#5CE1E6';
 
 /** Tints derived from ACCENT (approved mockup values). Re-check these when ACCENT changes. */
 const accentTints = {
-  accentPressed: '#19AE9F',
-  accentText: '#4FE0D0',
-  accentMuted: '#0E2F2C',
-  accentBorder: '#1F4D48',
+  accentPressed: '#10B8B3',
+  accentText: '#5CE0E6',
+  accentMuted: '#0B2E2D',
+  accentBorder: '#1C4F4D',
 } as const;
 
 export type ColorScheme = 'dark' | 'light';
@@ -104,25 +110,25 @@ function withAliases(c: CoreColors): ThemeColors {
 }
 
 const dark: CoreColors = {
-  bg0: '#08090A',
-  bg1: '#111416',
-  bg2: '#1A1E21',
-  bg3: '#252B2F',
-  border: '#2C3338',
+  bg0: '#070809',
+  bg1: '#0F1214',
+  bg2: '#171B1E',
+  bg3: '#1E2427',
+  border: '#262D31',
   borderStrong: '#3A434A',
   text1: '#F2F4F3',
   text2: '#A7B0B5',
   text3: '#7E8990',
   accent: ACCENT,
   ...accentTints,
-  onAccent: '#08090A',
+  onAccent: '#061413',
   success: '#3DD68C',
   gold: '#F5B544',
   goldMuted: '#2E2410',
   goldBorder: '#5A4A22',
   error: '#FF6166',
   errorMuted: '#3A1517',
-  barBg: 'rgba(8,9,10,0.94)',
+  barBg: 'rgba(7,8,9,0.92)',
   scrim: 'rgba(0,0,0,0.6)',
   data: [ACCENT, '#A594FF', '#F2B33D', '#FF7F6E', '#4EA8F5'],
 };
@@ -196,8 +202,10 @@ export const radius = {
   md: 12,
   /** Hero cards, bottom panels, medal tiles. */
   lg: 16,
-  /** Celebration card (PR). */
+  /** Celebration card (PR), hero cards (round 3). */
   xl: 20,
+  /** Brand banners, points card. */
+  xxl: 22,
   pill: 999,
 } as const;
 
@@ -214,6 +222,22 @@ export const motion = {
   pressScale: 0.97,
   /** Live dot pulse half-period. */
   pulse: 700,
+  /** Stagger between cards entering a screen. */
+  stagger: 60,
+  /** Card enter (fade + rise). */
+  enter: 420,
+  /** Chart line draw, ring fill. */
+  draw: 800,
+  /** Breathing glow on the screen's primary action (full period). */
+  breathe: 2400,
+  /** Sheen sweep across the points card (full period). */
+  sheen: 4000,
+} as const;
+
+/** Elevation for raised cards (iOS shadow + Android elevation). Dark UI: shadows are subtle. */
+export const elevation = {
+  card: { shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },
+  hero: { shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 14 }, elevation: 10 },
 } as const;
 
 /** Font family names as registered by `useFonts` (see fonts.ts). */

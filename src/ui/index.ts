@@ -3,7 +3,9 @@
 // Tokens and theme
 export {
   ACCENT,
+  BRAND_LIGHT,
   colors,
+  elevation,
   fontFamily,
   HIT_SLOP_MIN,
   layout,
@@ -56,6 +58,31 @@ export { Screen, type ScreenProps } from './Screen';
 export { Divider, SectionLabel, type SectionLabelProps } from './SectionLabel';
 export { StatTile, type StatTileProps } from './StatTile';
 export { Text, toneColor, type TextProps, type TextTone } from './Text';
+
+// Brand (logo, skyline, cold-start intro)
+export {
+  BrandIntro,
+  BrandMark,
+  Skyline,
+  type BrandIntroProps,
+  type BrandMarkProps,
+  type SkylineProps,
+  type SkylineReveal,
+} from './brand';
+
+// Motion (round 3). Every one of these respects the system "reduce motion" setting.
+export {
+  Appear,
+  Breathe,
+  CountUp,
+  Glow,
+  Sheen,
+  type AppearProps,
+  type BreatheProps,
+  type CountUpProps,
+  type GlowProps,
+  type SheenProps,
+} from './motion';
 
 // Charts
 export { BarList, LineChart, type BarListItem, type BarListProps, type LineChartProps, type LinePoint } from './charts';
