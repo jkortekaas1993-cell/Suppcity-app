@@ -1,6 +1,4 @@
-import { View } from 'react-native';
-
-import { Button, Card, Text, useTheme } from '@/ui';
+import { Button, Card, Text } from '@/ui';
 
 import { APP_DISCOUNT_CODE } from '../config';
 import { useDismissible } from '../state/flags';
@@ -10,17 +8,18 @@ import { useDismissible } from '../state/flags';
  * Hidden when no code is configured. The code is applied to new carts automatically.
  */
 export function WelcomeCard() {
-  const { space } = useTheme();
   const { visible, dismiss } = useDismissible('shop.welcomeCard.dismissed.v1');
   if (!APP_DISCOUNT_CODE || !visible) return null;
   return (
     <Card eyebrow="Welkom in de app">
-      <Text>
-        Bestel je via de app, dan zit code <Text variant="heading">{APP_DISCOUNT_CODE}</Text> er automatisch in.
+      <Text tone="secondary">
+        Bestel je via de app, dan zit code{' '}
+        <Text variant="bodyStrong" tnum>
+          {APP_DISCOUNT_CODE}
+        </Text>{' '}
+        er automatisch in.
       </Text>
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
-        <Button label="Begrepen" variant="ghost" onPress={dismiss} />
-      </View>
+      <Button label="Begrepen" variant="ghost" size="sm" onPress={dismiss} />
     </Card>
   );
 }

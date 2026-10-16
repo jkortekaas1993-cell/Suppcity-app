@@ -2,8 +2,8 @@ import { ShopifyApiError, userMessageFor } from '../errors';
 import type { FetchLike } from '../http';
 import { formatMoney, parseMoney } from '../money';
 import { createStorefrontClient, storefrontEndpoint } from '../storefront';
-import { mapProductDetail, parseClaimIds } from '../storefrontMappers';
-import { productDetailSchema } from '../storefrontSchemas';
+import { mapProductDetail, mapProductSummary, parseClaimIds } from '../storefrontMappers';
+import { productCardSchema, productDetailSchema } from '../storefrontSchemas';
 
 const eur = (amount: string) => ({ amount, currencyCode: 'EUR' });
 
@@ -174,6 +174,35 @@ describe('product mapping', () => {
     expect(p.variants[0]?.compareAtPrice?.cents).toBe(2995);
     expect(p.claimIds).toEqual(['creatine_performance']);
     expect(p.onlineStoreUrl).toBe('https://suppcity.nl/products/creatine');
+  });
+
+  it('maps the brand and the quick-add variant for grid tiles', () => {
+    const card = (quick: unknown, vendor: string | null = ' PER4M ') =>
+      mapProductSummary(
+        productCardSchema.parse({
+          id: 'p',
+          handle: 'whey',
+          title: 'Whey',
+          availableForSale: true,
+          featuredImage: null,
+          priceRange: { minVariantPrice: eur('69.99') },
+          vendor,
+          quickVariants: quick,
+        }),
+      );
+    expect(card({ nodes: [{ id: 'v1', availableForSale: true }] }).quickAddVariantId).toBe('v1');
+    expect(card({ nodes: [{ id: 'v1', availableForSale: false }] }).quickAddVariantId).toBeNull();
+    expect(
+      card({
+        nodes: [
+          { id: 'v1', availableForSale: true },
+          { id: 'v2', availableForSale: true },
+        ],
+      }).quickAddVariantId,
+    ).toBeNull();
+    expect(card(undefined).quickAddVariantId).toBeNull();
+    expect(card(null).vendor).toBe('PER4M');
+    expect(card(null, '  ').vendor).toBeNull();
   });
 
   it('ignores malformed claim metafields', () => {

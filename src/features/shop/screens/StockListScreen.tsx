@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 
-import { Button, Card, ListItem, Text } from '@/ui';
+import { Button, Card, EmptyState, ListRow } from '@/ui';
 
 import { SubScreen } from '../components/SubScreen';
+import { formatDateNl } from '../logic/format';
 import { estimateStock, localIsoDate } from '../logic/stock';
 import { stockStore, useStock } from '../state/stockStore';
 
@@ -20,20 +21,26 @@ export function StockListScreen() {
 
   return (
     <SubScreen
-      title="Mijn voorraad"
+      title="Voorraadteller"
       subtitle="Vul zelf in hoeveel je gebruikt. We schatten wanneer het op is, alleen op basis van wat jij hier invult."
-      footer={<Button label="Product toevoegen" fullWidth onPress={() => router.push('/shop/stock/edit')} />}
+      footer={<Button label="Product toevoegen" icon="plus" size="lg" fullWidth onPress={() => router.push('/shop/stock/edit')} />}
     >
       {rows.length === 0 ? (
-        <Text tone="muted">Nog niets toegevoegd. Voeg je pot creatine of whey toe en we laten weten wanneer hij bijna leeg is.</Text>
+        <EmptyState
+          icon="pill"
+          title="Nog niets toegevoegd"
+          body="Voeg je pot creatine of whey toe en we laten weten wanneer hij bijna leeg is."
+        />
       ) : (
-        <Card style={{ padding: 0 }}>
-          {rows.map(({ item, est }) => (
-            <ListItem
+        <Card padding={0} gap={0}>
+          {rows.map(({ item, est }, i) => (
+            <ListRow
               key={item.id}
               title={item.productTitle}
-              subtitle={est.isEmpty ? 'Waarschijnlijk op' : `Op rond ${new Date(est.runsOutOn).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}`}
-              value={`~${est.daysLeft} d`}
+              subtitle={est.isEmpty ? 'Waarschijnlijk op' : `Op rond ${formatDateNl(est.runsOutOn, 'dayMonth')}`}
+              value={est.isEmpty ? 'Op' : `~${est.daysLeft} ${est.daysLeft === 1 ? 'dag' : 'dagen'}`}
+              valueTone={est.shouldRemind ? 'gold' : 'secondary'}
+              divider={i < rows.length - 1}
               onPress={() => router.push({ pathname: '/shop/stock/edit', params: { id: item.id } })}
             />
           ))}

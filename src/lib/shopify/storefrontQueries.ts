@@ -9,9 +9,12 @@ const PRODUCT_CARD = /* GraphQL */ `
     id
     handle
     title
+    vendor
     availableForSale
     featuredImage { ${IMAGE} }
     priceRange { minVariantPrice { amount currencyCode } }
+    # Two are enough to know whether the grid "+" can add straight to the cart.
+    quickVariants: variants(first: 2) { nodes { id availableForSale } }
   }
 `;
 

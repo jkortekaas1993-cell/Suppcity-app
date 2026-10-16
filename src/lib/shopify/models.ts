@@ -21,6 +21,10 @@ export interface ProductSummary {
   image: ShopImage | null;
   priceFrom: Money;
   available: boolean;
+  /** Brand (Shopify vendor), shown as the eyebrow on product tiles. */
+  vendor: string | null;
+  /** Set when the product has exactly one variant and it is in stock: "+" adds it directly. */
+  quickAddVariantId: string | null;
 }
 
 export interface ProductVariant {
@@ -35,7 +39,6 @@ export interface ProductVariant {
 
 export interface ProductDetail extends ProductSummary {
   description: string;
-  vendor: string | null;
   images: ShopImage[];
   variants: ProductVariant[];
   /** True when the only variant is Shopify's implicit "Default Title". */

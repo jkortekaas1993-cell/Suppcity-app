@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { formatMoney, preloadCheckout, presentCheckout } from '@/lib/shopify';
-import { Button, Card, Text, useTheme } from '@/ui';
+import { Button, Card, EmptyState, Pill, Text, useTheme } from '@/ui';
 
 import { Notice } from '../components/Notice';
 import { ProductThumb } from '../components/ProductThumb';
@@ -52,8 +52,13 @@ export function CartScreen() {
 
   if (ordered) {
     return (
-      <SubScreen title="Bedankt!" subtitle="Je bestelling is geplaatst. Je krijgt een bevestiging per e-mail.">
-        <Button label="Verder winkelen" onPress={() => router.replace('/shop')} />
+      <SubScreen title="Bedankt!">
+        <EmptyState
+          icon="check"
+          title="Je bestelling is geplaatst"
+          body="Je krijgt een bevestiging per e-mail."
+          action={{ label: 'Verder winkelen', onPress: () => router.replace('/shop') }}
+        />
         <Button label="Voorraadteller instellen" variant="ghost" onPress={() => router.replace('/shop/stock')} />
       </SubScreen>
     );
@@ -61,6 +66,7 @@ export function CartScreen() {
 
   const empty = !cart || cart.lines.length === 0;
   const blocked = cart ? unavailableLines(cart) : [];
+  const applied = cart ? cart.discountCodes.filter((d) => d.applicable).map((d) => d.code) : [];
 
   return (
     <SubScreen
@@ -68,16 +74,23 @@ export function CartScreen() {
       footer={
         empty ? undefined : (
           <>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Text variant="heading">Totaal</Text>
-              <Text variant="heading" style={{ fontVariant: ['tabular-nums'] }}>
+              <Text variant="metric" style={{ fontSize: 28, lineHeight: 30 }} accessibilityLabel={`Totaal ${formatMoney(cart.total)}`}>
                 {formatMoney(cart.total)}
               </Text>
             </View>
-            <Text variant="caption" tone="muted">
+            <Text variant="caption" tone="tertiary">
               Verzendkosten en eventuele kortingen zie je bij het afrekenen.
             </Text>
-            <Button label="Afrekenen" fullWidth loading={opening} disabled={busy || !canCheckout(cart)} onPress={checkout} />
+            <Button
+              label="Afrekenen"
+              size="lg"
+              fullWidth
+              loading={opening}
+              disabled={busy || !canCheckout(cart)}
+              onPress={checkout}
+            />
           </>
         )
       }
@@ -89,36 +102,44 @@ export function CartScreen() {
       ) : null}
 
       {empty ? (
-        <>
-          <Text tone="muted">Je winkelwagen is leeg.</Text>
-          <Button label="Naar de shop" variant="secondary" onPress={() => router.replace('/shop')} />
-        </>
+        <EmptyState
+          icon="bag"
+          title="Je winkelwagen is leeg"
+          body="Kies iets uit de shop; je bestelling staat in een paar tikken klaar."
+          action={{ label: 'Naar de shop', onPress: () => router.replace('/shop') }}
+        />
       ) : (
-        <Card style={{ padding: 0 }}>
-          {cart.lines.map((line) => (
+        <Card padding={0} gap={0}>
+          {cart.lines.map((line, i) => (
             <View
               key={line.id}
               style={{
                 flexDirection: 'row',
                 gap: space.md,
-                padding: space.lg,
-                borderBottomWidth: 1,
+                padding: space.md + 2,
+                borderBottomWidth: i < cart.lines.length - 1 ? 1 : 0,
                 borderBottomColor: colors.border,
               }}
             >
-              <ProductThumb image={line.image} />
+              <ProductThumb image={line.image} size={64} />
               <View style={{ flex: 1, gap: space.xs }}>
-                <Text variant="heading">{line.productTitle}</Text>
-                {line.variantTitle ? <Text tone="muted">{line.variantTitle}</Text> : null}
-                {!line.available ? <Text tone="danger">Uitverkocht</Text> : null}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text variant="bodyStrong" numberOfLines={2}>
+                  {line.productTitle}
+                </Text>
+                {line.variantTitle ? (
+                  <Text variant="caption" tone="tertiary">
+                    {line.variantTitle}
+                  </Text>
+                ) : null}
+                {!line.available ? <Pill label="Uitverkocht" tone="danger" /> : null}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space.xs }}>
                   <Stepper
                     label={`Aantal ${line.productTitle}`}
                     value={line.quantity}
                     disabled={busy}
                     onChange={(q) => void cartStore.setQuantity(line, q)}
                   />
-                  <Text variant="heading" style={{ fontVariant: ['tabular-nums'] }}>
+                  <Text variant="bodyStrong" tnum style={{ fontSize: 16 }}>
                     {formatMoney(line.lineTotal)}
                   </Text>
                 </View>
@@ -127,11 +148,7 @@ export function CartScreen() {
           ))}
         </Card>
       )}
-      {cart && cart.discountCodes.some((d) => d.applicable) ? (
-        <Text variant="caption" tone="accent">
-          Kortingscode {cart.discountCodes.filter((d) => d.applicable).map((d) => d.code).join(', ')} is toegepast.
-        </Text>
-      ) : null}
+      {applied.length > 0 ? <Pill label={`Kortingscode ${applied.join(', ')} toegepast`} tone="accent" icon="check" /> : null}
     </SubScreen>
   );
 }

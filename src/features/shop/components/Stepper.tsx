@@ -1,8 +1,8 @@
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
-import { HIT_SLOP_MIN, Text, useTheme } from '@/ui';
+import { IconButton, radius, Text, useTheme } from '@/ui';
 
-/** − n + control with 48pt targets. */
+/** − n + control (40 visual, 48 touch area via hitSlop). */
 export function Stepper({
   value,
   onChange,
@@ -19,47 +19,39 @@ export function Stepper({
   /** For screen readers, e.g. "Aantal Creatine". */
   label: string;
 }) {
-  const { colors, radius } = useTheme();
-  const btn = (text: string, next: number, a11y: string) => {
-    const off = disabled || next < min || next > max;
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={a11y}
-        accessibilityState={{ disabled: off }}
-        disabled={off}
-        onPress={() => onChange(next)}
-        style={({ pressed }) => ({
-          width: HIT_SLOP_MIN,
-          height: HIT_SLOP_MIN,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: pressed ? colors.border : colors.surfaceRaised,
-          opacity: off ? 0.4 : 1,
-        })}
-      >
-        <Text variant="heading">{text}</Text>
-      </Pressable>
-    );
-  };
+  const { colors, space } = useTheme();
+  const btn = (icon: 'minus' | 'plus', next: number, a11y: string) => (
+    <IconButton
+      icon={icon}
+      size={40}
+      iconSize={18}
+      color={colors.text1}
+      haptic="selection"
+      accessibilityLabel={a11y}
+      disabled={disabled || next < min || next > max}
+      onPress={() => onChange(next)}
+    />
+  );
   return (
     <View
       accessibilityLabel={`${label}: ${value}`}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
+        gap: space.xxs,
+        padding: space.xxs,
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: radius.sm,
-        overflow: 'hidden',
+        borderRadius: radius.control,
+        backgroundColor: colors.bg2,
         alignSelf: 'flex-start',
       }}
     >
-      {btn('−', value - 1, `${label} verlagen`)}
-      <Text variant="heading" style={{ minWidth: 36, textAlign: 'center', fontVariant: ['tabular-nums'] }}>
+      {btn('minus', value - 1, `${label} verlagen`)}
+      <Text variant="heading" tnum style={{ minWidth: 28, textAlign: 'center' }}>
         {value}
       </Text>
-      {btn('+', value + 1, `${label} verhogen`)}
+      {btn('plus', value + 1, `${label} verhogen`)}
     </View>
   );
 }

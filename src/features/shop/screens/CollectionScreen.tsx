@@ -1,10 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 
 import { getStorefront } from '@/lib/shopify';
-import { Text } from '@/ui';
+import { EmptyState, Text } from '@/ui';
 
 import { LoadState } from '../components/LoadState';
-import { ProductList } from '../components/ProductList';
+import { ProductGrid } from '../components/ProductGrid';
 import { SubScreen } from '../components/SubScreen';
 import { useAsync } from '../state/useAsync';
 
@@ -15,9 +15,9 @@ export function CollectionScreen() {
   return (
     <SubScreen title={data?.collection.title ?? 'Categorie'} subtitle={data?.collection.description || undefined}>
       <LoadState loading={result.loading} error={result.error} onRetry={result.reload} />
-      {!result.loading && !result.error && !data ? <Text tone="muted">Deze categorie bestaat niet meer.</Text> : null}
-      {data && data.products.items.length === 0 ? <Text tone="muted">Nog geen producten in deze categorie.</Text> : null}
-      {data && data.products.items.length > 0 ? <ProductList products={data.products.items} /> : null}
+      {!result.loading && !result.error && !data ? <Text tone="secondary">Deze categorie bestaat niet meer.</Text> : null}
+      {data && data.products.items.length === 0 ? <EmptyState icon="bag" title="Nog geen producten" body="In deze categorie staat nu niets." /> : null}
+      {data && data.products.items.length > 0 ? <ProductGrid products={data.products.items} /> : null}
     </SubScreen>
   );
 }

@@ -7,16 +7,16 @@ export function LoadState({ loading, error, onRetry }: { loading: boolean; error
   const { colors, space } = useTheme();
   if (loading) {
     return (
-      <View style={{ padding: space.lg, alignItems: 'center' }}>
-        <ActivityIndicator color={colors.accent} accessibilityLabel="Laden" />
+      <View style={{ paddingVertical: space.xl, alignItems: 'center' }}>
+        <ActivityIndicator color={colors.text2} accessibilityLabel="Laden" />
       </View>
     );
   }
   if (!error) return null;
   return (
-    <View style={{ gap: space.sm }}>
-      <Text tone="danger">{error}</Text>
-      {onRetry ? <Button label="Opnieuw proberen" variant="secondary" onPress={onRetry} /> : null}
+    <View style={{ gap: space.md, alignItems: 'flex-start' }} accessibilityLiveRegion="polite">
+      <Text tone="secondary">{error}</Text>
+      {onRetry ? <Button label="Opnieuw proberen" variant="secondary" size="sm" onPress={onRetry} /> : null}
     </View>
   );
 }
