@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { newId, useRepositories } from '@/lib/db';
-import { Button, Card, ListRow, SectionLabel, Text, useTheme } from '@/ui';
+import { BrandMark, Button, Card, elevation, ListRow, radius, SectionLabel, Sheen, Skyline, Text, useTheme } from '@/ui';
 
 import { APPROVED_TIERS_FALLBACK, bestAffordableTier, nextTier } from './display';
 import { useAdultConfirmation, usePoints, useRedeem } from './hooks';
@@ -11,13 +12,18 @@ import { ADULT_CONFIRM_TEXT, canAfford, formatEuroCents, ledgerLabel, POINTS_RUL
 
 const dateNl = (iso: string) => new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
 
+/** Points card height (mockup Ik.dc.html). */
+const CARD_HEIGHT = 196;
+
 /**
- * Points card for the Ik tab (mockup Mijlpalen.dc.html): balance in big condensed
- * figures, "= €x korting" and "Inwisselen" (the Ik tab's one accent action). Inwisselen
- * opens the tiers and the history below the card. Signed-in users only.
+ * Points card for the Ik tab (mockup Ik.dc.html, design round 3): a dark premium card like
+ * a bank card, with the logo, the balance in big condensed figures, the points still needed
+ * for the next discount with a progress line, a faint skyline and a slow sheen.
+ * "Inwisselen" opens the tiers and the history below the card. Signed-in users only.
+ * UI only: the numbers come from usePoints and the server decides (hard rule 5).
  */
 export function PointsPanel() {
-  const { space } = useTheme();
+  const { colors, space } = useTheme();
   const repos = useRepositories();
   const points = usePoints();
   // The idempotency key survives an app restart (local app_state, wiped on sign-out).
@@ -51,64 +57,113 @@ export function PointsPanel() {
   const best = bestAffordableTier(points.balance, tiers);
   const next = nextTier(points.balance, tiers);
   const balance = points.balance.toLocaleString('nl-NL');
-  const worth = best
-    ? `= ${formatEuroCents(best.value_cents)} korting`
-    : next
-      ? `nog ${next.missing.toLocaleString('nl-NL')} tot ${formatEuroCents(next.tier.value_cents)}`
+  const toNext = next
+    ? `Nog ${next.missing.toLocaleString('nl-NL')} punten tot ${formatEuroCents(next.tier.value_cents)} korting`
+    : best
+      ? `= ${formatEuroCents(best.value_cents)} korting`
       : '';
+  // Progress toward the next reward (full once the top tier is within reach).
+  const progress = next ? Math.min(1, Math.max(0, points.balance / next.tier.points)) : best ? 1 : 0;
 
   return (
     <>
-      <Card>
+      <LinearGradient
+        // ≈ linear-gradient(145deg, #1A1F22 0%, #0B0D0E 70%) from the mockup, in theme colours.
+        colors={[colors.bg2, colors.bg0]}
+        locations={[0, 0.7]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={{
+          minHeight: CARD_HEIGHT,
+          borderRadius: radius.xxl,
+          borderWidth: 1,
+          borderColor: colors.border,
+          overflow: 'hidden',
+          padding: space.lg + 2,
+          justifyContent: 'space-between',
+          gap: space.md,
+          ...elevation.hero,
+        }}
+      >
+        <Skyline opacity={0.22} style={{ position: 'absolute', left: 0, right: 0, bottom: -1, width: '100%' }} />
+        <Sheen />
+        {/* Hairline top highlight: the "lit from above" edge of the premium cards. */}
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', top: 0, left: 16, right: 16, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }}
+        />
+
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-          <View style={{ flex: 1, gap: space.xxs }} accessible accessibilityLabel={`${balance} punten ${worth}`}>
-            <Text variant="eyebrow" tone="secondary">
-              Punten
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1 }}>
+            <BrandMark size={28} />
+            <Text variant="eyebrow" style={{ fontSize: 12, letterSpacing: 2 }} numberOfLines={1} accessibilityRole="header">
+              Supp City punten
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm - 2, flexWrap: 'wrap' }}>
-              <Text variant="metric" style={{ fontSize: 34, lineHeight: 36 }}>
-                {points.loading && points.balance === 0 ? '–' : balance}
-              </Text>
-              {worth ? (
-                <Text variant="caption" tone="tertiary" tnum>
-                  {worth}
-                </Text>
-              ) : null}
-            </View>
           </View>
           <Button
             label={open ? 'Sluiten' : 'Inwisselen'}
-            variant={open ? 'secondary' : 'primary'}
+            variant="link"
             size="sm"
             accessibilityState={{ expanded: open }}
             onPress={() => setOpen((o) => !o)}
+            style={{ marginRight: -space.md }}
           />
         </View>
-        {points.error ? (
-          <Text variant="caption" tone="danger">
-            {points.error}
+
+        <View style={{ gap: space.xxs }} accessible accessibilityLabel={`${balance} punten. ${toNext}`}>
+          <Text variant="hero" style={{ fontSize: 52, lineHeight: 54 }}>
+            {points.loading && points.balance === 0 ? '–' : balance}
           </Text>
-        ) : null}
-        {state.status === 'done' ? (
-          <Card variant="inset" gap={space.xs}>
-            <Text variant="eyebrow" tone="secondary">
-              Je kortingscode
+          {toNext ? (
+            <Text variant="caption" tone="secondary" tnum>
+              {toNext}
             </Text>
-            <Text variant="heading" tnum selectable>
-              {state.result.code}
+          ) : null}
+        </View>
+
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Voortgang naar je volgende korting"
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
+          style={{ height: 6, borderRadius: 3, backgroundColor: colors.bg3, overflow: 'hidden' }}
+        >
+          <LinearGradient
+            colors={[colors.accentPressed, colors.accent]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{ width: `${progress * 100}%`, height: 6, borderRadius: 3 }}
+          />
+        </View>
+      </LinearGradient>
+
+      {points.error || state.status === 'done' || state.status === 'error' ? (
+        <Card>
+          {points.error ? (
+            <Text variant="caption" tone="danger">
+              {points.error}
             </Text>
-            <Text variant="caption" tone="tertiary" tnum>
-              {formatEuroCents(state.result.valueCents)} korting vanaf {formatEuroCents(state.result.minOrderCents)}, geldig tot{' '}
-              {dateNl(state.result.expiresAt)}
+          ) : null}
+          {state.status === 'done' ? (
+            <Card variant="inset" gap={space.xs}>
+              <Text variant="eyebrow" tone="secondary">
+                Je kortingscode
+              </Text>
+              <Text variant="heading" tnum selectable>
+                {state.result.code}
+              </Text>
+              <Text variant="caption" tone="tertiary" tnum>
+                {formatEuroCents(state.result.valueCents)} korting vanaf {formatEuroCents(state.result.minOrderCents)}, geldig tot{' '}
+                {dateNl(state.result.expiresAt)}
+              </Text>
+            </Card>
+          ) : null}
+          {state.status === 'error' ? (
+            <Text variant="caption" tone="danger">
+              {state.message}
             </Text>
-          </Card>
-        ) : null}
-        {state.status === 'error' ? (
-          <Text variant="caption" tone="danger">
-            {state.message}
-          </Text>
-        ) : null}
-      </Card>
+          ) : null}
+        </Card>
+      ) : null}
 
       {open ? (
         <>

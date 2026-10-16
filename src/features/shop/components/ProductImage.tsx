@@ -13,12 +13,15 @@ export function ProductImage({
   size,
   rounded = radii.md,
   bordered = true,
+  transparent = false,
 }: {
   image: ShopImage | null;
   /** Fixed square size; omit to fill the parent width (aspect ratio 1). */
   size?: number;
   rounded?: number;
   bordered?: boolean;
+  /** No bg2 well: the image sits on the parent's backdrop (product tiles, the reorder banner). */
+  transparent?: boolean;
 }) {
   const { colors } = useTheme();
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
@@ -32,7 +35,7 @@ export function ProductImage({
         borderRadius: rounded,
         borderWidth: bordered ? 1 : 0,
         borderColor: colors.border,
-        backgroundColor: colors.bg2,
+        backgroundColor: transparent ? 'transparent' : colors.bg2,
         overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',

@@ -1,11 +1,12 @@
 import { router, type Href } from 'expo-router';
 import { Fragment, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Alert, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { formatDateNl, Notice, useAsync } from '@/features/shop';
 import { useCustomerSession } from '@/lib/shopify';
 import { authNotice } from '@/lib/supabase';
-import { Avatar, Button, Card, Icon, ListRow, Screen, Text, useTheme } from '@/ui';
+import { Appear, Button, Card, Icon, ListRow, Screen, Text, useTheme } from '@/ui';
 
 import { initialsFor, profileMeta } from './profile';
 import { loadProfileName, signIn, signOut } from './services/session';
@@ -35,7 +36,6 @@ export interface IkScreenProps {
   supplementsRow?: (props: { divider: boolean }) => ReactNode;
 }
 
-/** Ik tab (mockup Mijlpalen.dc.html): profile header, points, milestones, list rows, account deletion. */
 /**
  * Sign-out copy (ADR-15): trainingen are in the account and leave the device; the
  * supplement schedule is local only and stays, hidden until this account signs in again.
@@ -44,6 +44,11 @@ export const SIGN_OUT_MESSAGE =
   'Je trainingen worden eerst opgeslagen in je account en daarna van dit toestel gewist. ' +
   'Je supplementenschema blijft alleen op dit toestel bewaard en is weer te zien als je opnieuw inlogt.';
 
+/**
+ * Ik tab (mockup Ik.dc.html, design round 3): avatar on the accent gradient with name and
+ * "Lid sinds …", the points card, milestones, menu rows, sign-out and account deletion.
+ * The cards enter one after another (Appear).
+ */
 export function IkScreen({
   pointsSlot,
   badgesSlot,
@@ -113,46 +118,46 @@ export function IkScreen({
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md + 2, paddingTop: space.md }}>
-        {initials ? (
-          <Avatar initials={initials} size={56} accessibilityLabel={name.data ? `Profiel van ${name.data}` : undefined} />
-        ) : (
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.bg2,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon name="user" size={26} color={colors.text2} />
-          </View>
-        )}
+      <Appear index={0} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md + 2, paddingTop: space.md }}>
+        <LinearGradient
+          colors={[colors.accent, colors.accentPressed]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          accessible={Boolean(name.data)}
+          accessibilityLabel={name.data ? `Profiel van ${name.data}` : undefined}
+          style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
+        >
+          {initials ? (
+            <Text variant="title" style={{ color: colors.onAccent, fontSize: 24, lineHeight: 28 }} maxFontSizeMultiplier={1.2}>
+              {initials}
+            </Text>
+          ) : (
+            <Icon name="user" size={26} color={colors.onAccent} />
+          )}
+        </LinearGradient>
         <View style={{ flex: 1, gap: space.xxs }}>
-          <Text variant="title" accessibilityRole="header">
-            Jouw profiel
+          <Text variant="title" accessibilityRole="header" numberOfLines={1}>
+            {name.data ?? 'Jouw profiel'}
           </Text>
           <Text variant="caption" tone="tertiary" tnum>
             {meta}
           </Text>
         </View>
-      </View>
+      </Appear>
 
       {!signedIn ? (
-        <Card eyebrow="Account">
-          <Text tone="secondary">Log in met je Supp City-account voor bestellingen, punten en een back-up van je trainingen.</Text>
-          <Button
-            label="Inloggen met Supp City"
-            size="lg"
-            fullWidth
-            loading={busy || session === 'unknown'}
-            onPress={onSignIn}
-          />
-        </Card>
+        <Appear index={1}>
+          <Card eyebrow="Account">
+            <Text tone="secondary">Log in met je Supp City-account voor bestellingen, punten en een back-up van je trainingen.</Text>
+            <Button
+              label="Inloggen met Supp City"
+              size="lg"
+              fullWidth
+              loading={busy || session === 'unknown'}
+              onPress={onSignIn}
+            />
+          </Card>
+        </Appear>
       ) : null}
 
       {message ? <Notice message={message} onDismiss={() => setMessage(null)} /> : null}
@@ -168,43 +173,51 @@ export function IkScreen({
         )
       ) : null}
 
-      {signedIn ? (pointsSlot ?? null) : null}
-      {challengeSlot ?? null}
-      {badgesSlot ?? null}
+      {signedIn && pointsSlot ? (
+        <Appear index={1} style={{ gap: space.lg }}>
+          {pointsSlot}
+        </Appear>
+      ) : null}
+      {challengeSlot ? <Appear index={2}>{challengeSlot}</Appear> : null}
+      {badgesSlot ? <Appear index={3}>{badgesSlot}</Appear> : null}
 
-      <Card padding={0} gap={0}>
-        {visible.map((r, i) =>
-          r.render ? (
-            <Fragment key={r.title}>{r.render({ divider: i < visible.length - 1 })}</Fragment>
-          ) : (
-            <ListRow
-              key={r.title}
-              title={r.title}
-              subtitle={r.subtitle}
-              divider={i < visible.length - 1}
-              onPress={() => router.push(r.href)}
-            />
-          ),
-        )}
-      </Card>
+      <Appear index={4}>
+        <Card padding={0} gap={0}>
+          {visible.map((r, i) =>
+            r.render ? (
+              <Fragment key={r.title}>{r.render({ divider: i < visible.length - 1 })}</Fragment>
+            ) : (
+              <ListRow
+                key={r.title}
+                title={r.title}
+                subtitle={r.subtitle}
+                divider={i < visible.length - 1}
+                onPress={() => router.push(r.href)}
+              />
+            ),
+          )}
+        </Card>
+      </Appear>
 
       {signedIn ? (
-        <Card padding={0} gap={0}>
-          <ListRow
-            title="Uitloggen"
-            subtitle={name.data ? `Ingelogd als ${name.data}` : 'Eén account voor suppcity.nl en de app'}
-            chevron={false}
-            divider
-            onPress={busy ? undefined : confirmSignOut}
-            accessibilityHint="Je trainingen worden eerst opgeslagen in je account"
-          />
-          <ListRow
-            title="Account verwijderen"
-            subtitle="Definitief, direct in de app"
-            destructive
-            onPress={() => router.push('/account/delete')}
-          />
-        </Card>
+        <Appear index={5}>
+          <Card padding={0} gap={0}>
+            <ListRow
+              title="Uitloggen"
+              subtitle={name.data ? `Ingelogd als ${name.data}` : 'Eén account voor suppcity.nl en de app'}
+              chevron={false}
+              divider
+              onPress={busy ? undefined : confirmSignOut}
+              accessibilityHint="Je trainingen worden eerst opgeslagen in je account"
+            />
+            <ListRow
+              title="Account verwijderen"
+              subtitle="Definitief, direct in de app"
+              destructive
+              onPress={() => router.push('/account/delete')}
+            />
+          </Card>
+        </Appear>
       ) : null}
     </Screen>
   );
