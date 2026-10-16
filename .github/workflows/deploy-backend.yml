@@ -75,9 +75,14 @@ jobs:
 
       - name: Deploy Edge Functions
         run: |
+          fail=0
           for fn in shopify-auth-exchange delete-account redeem-points shopify-webhooks; do
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api
+            if ! supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF" --use-api > "fn-$fn.log" 2>&1; then
+              tail -15 "fn-$fn.log" | while IFS= read -r l; do echo "::error::[$fn] $l"; done
+              fail=1
+            else echo "::notice::deployed $fn"; fi
           done
+          exit $fail
 
       - name: Summary
         run: |
