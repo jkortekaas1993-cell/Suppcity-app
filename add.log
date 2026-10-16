@@ -1,0 +1,18 @@
+› Installing 1 SDK 54.0.0 compatible native module using npm
+> npm install
+
+added 2 packages, removed 1 package, and audited 1159 packages in 12s
+
+207 packages are looking for funding
+  run `npm fund` for details
+
+67 vulnerabilities (2 low, 18 moderate, 47 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+exit=0

@@ -18,8 +18,8 @@
   "dependencies": {
     "@expo-google-fonts/barlow": "0.4.1",
     "@expo-google-fonts/barlow-condensed": "0.4.1",
-    "@react-navigation/bottom-tabs": "7.4.0",
-    "@react-navigation/native": "7.5.1",
+    "@react-navigation/bottom-tabs": "^7.4.0",
+    "@react-navigation/native": "^7.1.8",
     "@shopify/checkout-sheet-kit": "3.4.0",
     "@supabase/supabase-js": "2.57.4",
     "expo": "54.0.37",
@@ -36,6 +36,7 @@
     "expo-router": "6.0.24",
     "expo-secure-store": "15.0.8",
     "expo-sharing": "14.0.8",
+    "expo-splash-screen": "~31.0.13",
     "expo-sqlite": "16.0.10",
     "expo-status-bar": "3.0.9",
     "expo-web-browser": "15.0.11",
