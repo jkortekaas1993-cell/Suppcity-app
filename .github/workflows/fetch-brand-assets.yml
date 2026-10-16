@@ -1,0 +1,37 @@
+name: Fetch brand assets
+
+# Manual: downloads the Supp City logo/icon (owner's own assets from suppcity.nl) and
+# a few product packshots, and pushes them to the ci/assets branch for review.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download
+        run: |
+          mkdir -p out/brand out/packshots
+          dl() { curl -fsSL -A "SuppCityAppCI/1.0" "$1" -o "$2" && echo "::notice::ok $2 ($(stat -c%s "$2") bytes)" || echo "::error::failed $1"; }
+          dl "https://suppcity.nl/cdn/shop/files/Supp_City_Favicon.png?v=1721138164" out/brand/icon-square.png
+          dl "https://suppcity.nl/cdn/shop/files/Suppcity_logo.png?v=1721826246" out/brand/logo-wide.png
+          dl "https://cdn.shopify.com/s/files/1/0827/0309/0012/files/Per4m_AdvancedWhey_1800G_CherryBakewell.png?v=1791898233&width=800" out/packshots/per4m-whey.png
+          dl "https://cdn.shopify.com/s/files/1/0827/0309/0012/files/510F547A-0286-4371-A137-1E5357EFA0F5.png?v=1759911380&width=800" out/packshots/per4m-hydrate.png
+          dl "https://cdn.shopify.com/s/files/1/0827/0309/0012/files/Applied-Nutrition-ABE-Slush-Puppie-Red-Blue-Mix-Pre-Workout-30-Servings_1200x_fa52202c-b06c-47ea-9ad3-1b8625886773.webp?v=1775931687&width=800" out/packshots/abe-ultimate.webp
+          dl "https://cdn.shopify.com/s/files/1/0827/0309/0012/files/Jouw_alineatekst_83.png?v=1782473067&width=800" out/packshots/applied-critical-whey.png
+          file out/*/* || true
+      - name: Push to ci/assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan ci/assets
+          git rm -rfq .
+          cp -r out/* .
+          rm -rf out
+          git add -A
+          git commit -qm "Brand assets and packshots"
+          git push -fq origin ci/assets
